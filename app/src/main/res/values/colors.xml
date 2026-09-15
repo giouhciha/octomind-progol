@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ink">#17342A</color>
+    <color name="muted">#60756D</color>
+    <color name="surface">#F2F8F5</color>
+    <color name="card">#FFFFFF</color>
+    <color name="primary">#16A66A</color>
+    <color name="primary_dark">#087A4A</color>
+    <color name="divider">#D2E5DC</color>
+    <color name="pick_green">#16A66A</color>
+    <color name="row_surface">#F4F9F7</color>
+</resources>

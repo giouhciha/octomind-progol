@@ -1,0 +1,553 @@
+{
+  "audit": {
+    "contests": 811,
+    "first_contest": 1,
+    "last_contest": 812,
+    "first_date": "2010-04-01",
+    "last_date": "2026-09-11",
+    "missing_contests": [
+      490
+    ],
+    "duplicate_contests": [],
+    "state_counts": {
+      "L": 3155,
+      "E": 1954,
+      "V": 2190
+    }
+  },
+  "burn_in": 100,
+  "development_end_contest": 598,
+  "champion": "global_frequency",
+  "development_metrics": [
+    {
+      "model": "global_frequency",
+      "observations": 4473,
+      "log_loss": 1.0845613113455748,
+      "brier": 0.657150907590942,
+      "accuracy": 0.41918175720992623,
+      "top2_coverage": 0.7256874580818243
+    },
+    {
+      "model": "recent_hl_104",
+      "observations": 4473,
+      "log_loss": 1.0852726038816596,
+      "brier": 0.657113155765007,
+      "accuracy": 0.41918175720992623,
+      "top2_coverage": 0.7084730605857367
+    },
+    {
+      "model": "recent_hl_52",
+      "observations": 4473,
+      "log_loss": 1.0856317578003734,
+      "brier": 0.6572456333783637,
+      "accuracy": 0.41873463000223565,
+      "top2_coverage": 0.706460988151129
+    },
+    {
+      "model": "blend_hl_52",
+      "observations": 4473,
+      "log_loss": 1.086187274107014,
+      "brier": 0.6576843573003036,
+      "accuracy": 0.41806393919069973,
+      "top2_coverage": 0.7071316789626649
+    },
+    {
+      "model": "blend_hl_104",
+      "observations": 4473,
+      "log_loss": 1.0862919152758352,
+      "brier": 0.6578378141886132,
+      "accuracy": 0.41918175720992623,
+      "top2_coverage": 0.7113793874357255
+    },
+    {
+      "model": "blend_hl_26",
+      "observations": 4473,
+      "log_loss": 1.0867161051285341,
+      "brier": 0.6580060329406561,
+      "accuracy": 0.4182875027945451,
+      "top2_coverage": 0.7098144422088084
+    },
+    {
+      "model": "recent_hl_26",
+      "observations": 4473,
+      "log_loss": 1.0869196764261848,
+      "brier": 0.6580449617006743,
+      "accuracy": 0.4164989939637827,
+      "top2_coverage": 0.7100380058126537
+    },
+    {
+      "model": "position_frequency",
+      "observations": 4473,
+      "log_loss": 1.0872336488596233,
+      "brier": 0.6586990999099684,
+      "accuracy": 0.41918175720992623,
+      "top2_coverage": 0.717862731947239
+    },
+    {
+      "model": "recent_hl_13",
+      "observations": 4473,
+      "log_loss": 1.0880965368584734,
+      "brier": 0.6588733184714428,
+      "accuracy": 0.4169461211714733,
+      "top2_coverage": 0.7131678962664878
+    },
+    {
+      "model": "transition",
+      "observations": 4473,
+      "log_loss": 1.0935048517553647,
+      "brier": 0.6625688979790596,
+      "accuracy": 0.41873463000223565,
+      "top2_coverage": 0.7113793874357255
+    },
+    {
+      "model": "uniform",
+      "observations": 4473,
+      "log_loss": 1.0986122886680256,
+      "brier": 0.6666666666666399,
+      "accuracy": 0.41918175720992623,
+      "top2_coverage": 0.6932707355242567
+    }
+  ],
+  "holdout_metrics": [
+    {
+      "model": "position_frequency",
+      "observations": 1926,
+      "log_loss": 1.075493620557446,
+      "brier": 0.6509245685972587,
+      "accuracy": 0.42990654205607476,
+      "top2_coverage": 0.7419522326064382
+    },
+    {
+      "model": "blend_hl_104",
+      "observations": 1926,
+      "log_loss": 1.0759901919063177,
+      "brier": 0.6512952854791046,
+      "accuracy": 0.42782969885773625,
+      "top2_coverage": 0.7461059190031153
+    },
+    {
+      "model": "transition",
+      "observations": 1926,
+      "log_loss": 1.076559140904093,
+      "brier": 0.6515779116999395,
+      "accuracy": 0.43042575285565937,
+      "top2_coverage": 0.7414330218068536
+    },
+    {
+      "model": "blend_hl_52",
+      "observations": 1926,
+      "log_loss": 1.0768108768929492,
+      "brier": 0.6518631802377572,
+      "accuracy": 0.42938733125649015,
+      "top2_coverage": 0.7455867082035307
+    },
+    {
+      "model": "recent_hl_104",
+      "observations": 1926,
+      "log_loss": 1.076823913280056,
+      "brier": 0.6518783840342618,
+      "accuracy": 0.42834890965732086,
+      "top2_coverage": 0.7455867082035307
+    },
+    {
+      "model": "global_frequency",
+      "observations": 1926,
+      "log_loss": 1.0770471411147398,
+      "brier": 0.6518958812201573,
+      "accuracy": 0.42990654205607476,
+      "top2_coverage": 0.7372793354101765
+    },
+    {
+      "model": "blend_hl_26",
+      "observations": 1926,
+      "log_loss": 1.0774308548834624,
+      "brier": 0.6522415592634156,
+      "accuracy": 0.43198338525441327,
+      "top2_coverage": 0.7377985462097612
+    },
+    {
+      "model": "recent_hl_52",
+      "observations": 1926,
+      "log_loss": 1.0783137141418304,
+      "brier": 0.6528866827552685,
+      "accuracy": 0.4236760124610592,
+      "top2_coverage": 0.7419522326064382
+    },
+    {
+      "model": "recent_hl_13",
+      "observations": 1926,
+      "log_loss": 1.0793286952628174,
+      "brier": 0.6534375895315887,
+      "accuracy": 0.43042575285565937,
+      "top2_coverage": 0.7336448598130841
+    },
+    {
+      "model": "recent_hl_26",
+      "observations": 1926,
+      "log_loss": 1.0795419541397675,
+      "brier": 0.6536321513864574,
+      "accuracy": 0.42679127725856697,
+      "top2_coverage": 0.7398753894080997
+    },
+    {
+      "model": "uniform",
+      "observations": 1926,
+      "log_loss": 1.098612288668143,
+      "brier": 0.6666666666666698,
+      "accuracy": 0.42990654205607476,
+      "top2_coverage": 0.6926272066458983
+    }
+  ],
+  "joint_development_metrics": [
+    {
+      "model": "global_independent",
+      "contests": 497,
+      "card_log_loss": 9.76105180211014,
+      "slot_equivalent_log_loss": 1.0845613113455712
+    },
+    {
+      "model": "global_composition",
+      "contests": 497,
+      "card_log_loss": 9.860710295941,
+      "slot_equivalent_log_loss": 1.0956344773267779
+    }
+  ],
+  "joint_holdout_metrics": [
+    {
+      "model": "global_independent",
+      "contests": 214,
+      "card_log_loss": 9.693424270032665,
+      "slot_equivalent_log_loss": 1.0770471411147406
+    },
+    {
+      "model": "global_composition",
+      "contests": 214,
+      "card_log_loss": 9.735129710276361,
+      "slot_equivalent_log_loss": 1.0816810789195956
+    }
+  ],
+  "next_contest": 813,
+  "forecast": [
+    {
+      "slot": 1,
+      "probabilities": {
+        "L": 0.43221,
+        "E": 0.267735,
+        "V": 0.300055
+      },
+      "prediction": "L",
+      "second_choice": "V",
+      "entropy": 0.979936
+    },
+    {
+      "slot": 2,
+      "probabilities": {
+        "L": 0.43221,
+        "E": 0.267735,
+        "V": 0.300055
+      },
+      "prediction": "L",
+      "second_choice": "V",
+      "entropy": 0.979936
+    },
+    {
+      "slot": 3,
+      "probabilities": {
+        "L": 0.43221,
+        "E": 0.267735,
+        "V": 0.300055
+      },
+      "prediction": "L",
+      "second_choice": "V",
+      "entropy": 0.979936
+    },
+    {
+      "slot": 4,
+      "probabilities": {
+        "L": 0.43221,
+        "E": 0.267735,
+        "V": 0.300055
+      },
+      "prediction": "L",
+      "second_choice": "V",
+      "entropy": 0.979936
+    },
+    {
+      "slot": 5,
+      "probabilities": {
+        "L": 0.43221,
+        "E": 0.267735,
+        "V": 0.300055
+      },
+      "prediction": "L",
+      "second_choice": "V",
+      "entropy": 0.979936
+    },
+    {
+      "slot": 6,
+      "probabilities": {
+        "L": 0.43221,
+        "E": 0.267735,
+        "V": 0.300055
+      },
+      "prediction": "L",
+      "second_choice": "V",
+      "entropy": 0.979936
+    },
+    {
+      "slot": 7,
+      "probabilities": {
+        "L": 0.43221,
+        "E": 0.267735,
+        "V": 0.300055
+      },
+      "prediction": "L",
+      "second_choice": "V",
+      "entropy": 0.979936
+    },
+    {
+      "slot": 8,
+      "probabilities": {
+        "L": 0.43221,
+        "E": 0.267735,
+        "V": 0.300055
+      },
+      "prediction": "L",
+      "second_choice": "V",
+      "entropy": 0.979936
+    },
+    {
+      "slot": 9,
+      "probabilities": {
+        "L": 0.43221,
+        "E": 0.267735,
+        "V": 0.300055
+      },
+      "prediction": "L",
+      "second_choice": "V",
+      "entropy": 0.979936
+    }
+  ],
+  "recommended_combinations": [
+    {
+      "rank": 1,
+      "sequence": "VLVLVLELE",
+      "local": 4,
+      "draw": 2,
+      "away": 3,
+      "probability": 6.7576e-05,
+      "composition_probability": 0.08748846,
+      "relative_to_best": 0.383725,
+      "minimum_distance": 0
+    },
+    {
+      "rank": 2,
+      "sequence": "LVLVLEVEL",
+      "local": 4,
+      "draw": 2,
+      "away": 3,
+      "probability": 6.7576e-05,
+      "composition_probability": 0.08748846,
+      "relative_to_best": 0.383725,
+      "minimum_distance": 9
+    },
+    {
+      "rank": 3,
+      "sequence": "LLELEVLVL",
+      "local": 5,
+      "draw": 2,
+      "away": 2,
+      "probability": 9.7339e-05,
+      "composition_probability": 0.07878672,
+      "relative_to_best": 0.552731,
+      "minimum_distance": 7
+    },
+    {
+      "rank": 4,
+      "sequence": "VLLELELLV",
+      "local": 5,
+      "draw": 2,
+      "away": 2,
+      "probability": 9.7339e-05,
+      "composition_probability": 0.07878672,
+      "relative_to_best": 0.552731,
+      "minimum_distance": 6
+    },
+    {
+      "rank": 5,
+      "sequence": "VELVELEVL",
+      "local": 3,
+      "draw": 3,
+      "away": 3,
+      "probability": 4.18603e-05,
+      "composition_probability": 0.0702846,
+      "relative_to_best": 0.2377,
+      "minimum_distance": 6
+    },
+    {
+      "rank": 6,
+      "sequence": "LEVLVELEV",
+      "local": 3,
+      "draw": 3,
+      "away": 3,
+      "probability": 4.18603e-05,
+      "composition_probability": 0.0702846,
+      "relative_to_best": 0.2377,
+      "minimum_distance": 6
+    },
+    {
+      "rank": 7,
+      "sequence": "LEVELVELL",
+      "local": 4,
+      "draw": 3,
+      "away": 2,
+      "probability": 6.02971e-05,
+      "composition_probability": 0.06440372,
+      "relative_to_best": 0.342392,
+      "minimum_distance": 6
+    },
+    {
+      "rank": 8,
+      "sequence": "LVELVLVLV",
+      "local": 4,
+      "draw": 1,
+      "away": 4,
+      "probability": 7.57335e-05,
+      "composition_probability": 0.05409656,
+      "relative_to_best": 0.430046,
+      "minimum_distance": 5
+    },
+    {
+      "rank": 9,
+      "sequence": "EVVEVLLVL",
+      "local": 3,
+      "draw": 2,
+      "away": 4,
+      "probability": 4.69135e-05,
+      "composition_probability": 0.05316753,
+      "relative_to_best": 0.266394,
+      "minimum_distance": 6
+    },
+    {
+      "rank": 10,
+      "sequence": "ELVVELVEV",
+      "local": 2,
+      "draw": 3,
+      "away": 4,
+      "probability": 2.90608e-05,
+      "composition_probability": 0.04901604,
+      "relative_to_best": 0.165019,
+      "minimum_distance": 6
+    },
+    {
+      "rank": 11,
+      "sequence": "LVLLELLEE",
+      "local": 5,
+      "draw": 3,
+      "away": 1,
+      "probability": 8.68543e-05,
+      "composition_probability": 0.04678158,
+      "relative_to_best": 0.493195,
+      "minimum_distance": 5
+    },
+    {
+      "rank": 12,
+      "sequence": "EVLLLVLLL",
+      "local": 6,
+      "draw": 1,
+      "away": 2,
+      "probability": 0.0001571365,
+      "composition_probability": 0.04307096,
+      "relative_to_best": 0.892287,
+      "minimum_distance": 5
+    },
+    {
+      "rank": 13,
+      "sequence": "LELEVEVLE",
+      "local": 3,
+      "draw": 4,
+      "away": 2,
+      "probability": 3.73514e-05,
+      "composition_probability": 0.03843713,
+      "relative_to_best": 0.212097,
+      "minimum_distance": 5
+    },
+    {
+      "rank": 14,
+      "sequence": "VLEELLEEL",
+      "local": 4,
+      "draw": 4,
+      "away": 1,
+      "probability": 5.38023e-05,
+      "composition_probability": 0.03571349,
+      "relative_to_best": 0.305512,
+      "minimum_distance": 5
+    },
+    {
+      "rank": 15,
+      "sequence": "LLVVLLLVE",
+      "local": 5,
+      "draw": 1,
+      "away": 3,
+      "probability": 0.0001090894,
+      "composition_probability": 0.03140749,
+      "relative_to_best": 0.619455,
+      "minimum_distance": 5
+    },
+    {
+      "rank": 16,
+      "sequence": "LLELLEVLL",
+      "local": 6,
+      "draw": 2,
+      "away": 1,
+      "probability": 0.0001402108,
+      "composition_probability": 0.0273245,
+      "relative_to_best": 0.796175,
+      "minimum_distance": 4
+    },
+    {
+      "rank": 17,
+      "sequence": "LVEVEVELE",
+      "local": 2,
+      "draw": 4,
+      "away": 3,
+      "probability": 2.59305e-05,
+      "composition_probability": 0.0260571,
+      "relative_to_best": 0.147244,
+      "minimum_distance": 5
+    },
+    {
+      "rank": 18,
+      "sequence": "VLLLVVVEV",
+      "local": 3,
+      "draw": 1,
+      "away": 5,
+      "probability": 5.25767e-05,
+      "composition_probability": 0.02470514,
+      "relative_to_best": 0.298552,
+      "minimum_distance": 5
+    },
+    {
+      "rank": 19,
+      "sequence": "VLLVLLVLL",
+      "local": 6,
+      "draw": 0,
+      "away": 3,
+      "probability": 0.0001761054,
+      "composition_probability": 0.02201668,
+      "relative_to_best": 1.0,
+      "minimum_distance": 4
+    },
+    {
+      "rank": 20,
+      "sequence": "VVLVVELVE",
+      "local": 2,
+      "draw": 2,
+      "away": 5,
+      "probability": 3.25689e-05,
+      "composition_probability": 0.02104987,
+      "relative_to_best": 0.18494,
+      "minimum_distance": 5
+    }
+  ]
+}
