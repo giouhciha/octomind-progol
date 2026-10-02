@@ -1,14 +1,26 @@
 # Octomind Progol
 
 Aplicacion Android nativa y motor reproducible para estimar las probabilidades
-`L`, `E` y `V` de las nueve casillas del siguiente concurso de Progol Media
-Semana.
+`L`, `E` y `V` del siguiente concurso de Mitad de Semana (9 partidos),
+Fin de Semana (14) y Revancha (7).
 
-## Version Android (0.3.2)
+## Version Android (0.4.0)
 
-- Descarga y valida el historico oficial de Progol Media Semana.
+- Descarga y valida el historico oficial de cada uno de los tres sorteos.
+- Selector entre Mitad de Semana y Fin de Semana + Revancha. En esta ultima
+  vista cada pagina muestra los 14 partidos y debajo los 7 de Revancha.
+- Cada sorteo tiene su motor configurado, historial, paquetes y captura separados.
+  Principal y Revancha comparten el codigo oficial 10, pero no sus datos.
+- Si los ultimos concursos de principal y Revancha no coinciden, se informa y
+  no se presentan como un paquete conjunto de concursos diferentes.
 - Guarda concursos y pronosticos localmente en SQLite para trabajar sin conexion.
-- Calcula las 19,683 secuencias posibles y entrega un paquete diverso de 20.
+- Entrega 20 combinaciones por sorteo. MS enumera 19,683 secuencias, Revancha
+  2,187 y Principal 4,782,969. Para Principal se conserva una muestra
+  reproducible de hasta 1,500 candidatos por composicion seleccionada;
+  esta seleccion aproximada limita la memoria del dispositivo.
+- Al calcular con favoritos guarda dos grupos independientes de 20: uno
+  automático y uno personalizado. Ambos se conservan en el respaldo y pueden
+  compararse por separado en Seguimiento.
 - Presenta cada pronostico como una pagina visual de nueve partidos: la opcion
   L/E/V elegida se resalta en verde y se cambia deslizando horizontalmente.
 - Mantiene las probabilidades base como parte interna del calculo, sin mostrar
@@ -25,20 +37,25 @@ Semana.
 - Ordena la comparacion de mayor a menor cantidad de aciertos.
 - Cuando el concurso aparece en el historico oficial, sustituye la captura manual
   por el resultado validado y definitivo.
+- El primer paquete guardado de cada concurso se conserva al recalcular.
+- El respaldo conjunto incluye los tres sorteos. Los respaldos antiguos de
+  Mitad de Semana siguen siendo compatibles y no sustituyen los otros sorteos.
 
 El APK instalable de prueba se genera en
 `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Criterio del modelo
 
-- Usa exclusivamente el historico oficial de Progol Media Semana.
+- Cada motor usa exclusivamente el historico oficial de su propio sorteo.
 - Valida el CSV antes de analizarlo.
 - Evalua los modelos de forma cronologica: cada concurso solo puede usar los
   resultados publicados anteriormente.
 - Compara cada candidato contra referencias simples.
 - Genera un reporte y un pronostico probabilistico para el siguiente concurso.
 
-La version actual usa como base las frecuencias globales validadas por backtest.
+La version actual usa frecuencias globales suavizadas por sorteo. El backtest
+existente corresponde a Mitad de Semana; sus conclusiones no se trasladan
+como evidencia de rendimiento a Principal o Revancha.
 Las frecuencias por casilla no superaron de forma consistente esa referencia,
 por lo que no se fuerza una diferencia artificial entre posiciones. La capa de
 combinaciones conserva del sistema de referencia la idea util de restricciones,
@@ -57,6 +74,21 @@ Abra la carpeta en Android Studio y ejecute la configuracion `app`, o use:
 Requiere Android SDK 36 y Java 17 o posterior.
 
 ## Experimento reproducible
+
+### Backtest del paquete de 20 combinaciones
+
+El siguiente análisis evalúa el mejor boleto de cada paquete de 20 de forma
+cronológica para Mitad de Semana, Fin de Semana y Revancha. Separa desarrollo
+y prueba final, por lo que una configuración solo se adopta si también se
+mantiene fuera del tramo donde se eligió.
+
+```powershell
+& 'C:\Program Files\Amazon\AWSSAMCLI\runtime\python.exe' scripts/run_package_backtest.py --step 50
+```
+
+El reporte se guarda en `outputs/package-backtest/report.md`. El valor
+actual del motor (`prior_20_div_20`) se conserva como referencia: no se
+reemplaza por una variante que no supere la prueba final.
 
 ## Ejecutar el experimento
 
@@ -79,6 +111,22 @@ python scripts/run_media_semana_experiment.py --input ruta/al/archivo.csv
 
 ## Pruebas
 
+Las pruebas Android del motor incluyen aislamiento por sorteo, esquemas CSV,
+20 combinaciones únicas y reproducibles, composiciones extremas y aciertos
+parciales para 7 y 14 posiciones:
+
+```powershell
+.\gradlew.bat testDebugUnitTest
+```
+
+`IntegrationInstrumentation` verifica SQLite, respaldos y conciliación oficial
+en bases temporales con prefijo `qa_`. Por defecto descarga los históricos.
+Para una prueba sin red admite `-e useFixtures true` usando archivos oficiales
+`MS.csv`, `WEEKEND.csv` y `REVANCHA.csv` en `app/build/qa-assets/` antes de
+compilar el APK de pruebas. Esos archivos no se distribuyen en la aplicación.
+La opción `-e seedUi true` es exclusiva de un emulador desechable: carga
+los datos oficiales en la app de esa instancia para verificar su interfaz.
+
 ```powershell
 python -m unittest discover -s tests -v
 ```
@@ -86,3 +134,7 @@ python -m unittest discover -s tests -v
 ## Fuente
 
 [Historico oficial de Progol Media Semana](https://www.loterianacional.gob.mx/Documentos/Historicos/Progol-Media-S.csv)
+
+[Histórico de Fin de Semana](https://www.loterianacional.gob.mx/Home/Historicos?ARHP=UAByAG8AZwBvAGwA)
+
+[Histórico de Revancha](https://www.loterianacional.gob.mx/Home/Historicos?ARHP=UAByAG8AZwBvAGwALQBSAGUAdgBhAG4AYwBoAGEA)

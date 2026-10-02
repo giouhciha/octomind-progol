@@ -12,17 +12,15 @@ public final class Contest {
     private final String[] results;
 
     public Contest(int product, int number, LocalDate date, String[] results) {
-        if (product != 25) {
-            throw new IllegalArgumentException("Producto inesperado: " + product);
-        }
+        if (results != null) DrawType.identify(product, results.length);
         if (number < 1) {
             throw new IllegalArgumentException("Numero de concurso invalido");
         }
         if (date == null) {
             throw new IllegalArgumentException("La fecha es obligatoria");
         }
-        if (results == null || results.length != SLOT_COUNT) {
-            throw new IllegalArgumentException("Se requieren nueve resultados");
+        if (results == null || (results.length != 9 && results.length != 14 && results.length != 7)) {
+            throw new IllegalArgumentException("Cantidad de resultados no válida");
         }
         for (String result : results) {
             if (!isValidState(result)) {
@@ -59,4 +57,3 @@ public final class Contest {
         return Arrays.copyOf(results, results.length);
     }
 }
-

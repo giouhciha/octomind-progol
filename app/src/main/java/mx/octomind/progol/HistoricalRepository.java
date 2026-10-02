@@ -22,13 +22,15 @@ import java.util.Set;
 public final class HistoricalRepository {
     public static final String OFFICIAL_URL =
             "https://www.loterianacional.gob.mx/Documentos/Historicos/Progol-Media-S.csv";
-    private static final String EXPECTED_HEADER =
-            "NPRODUCTO,CONCURSO,R1,R2,R3,R4,R5,R6,R7,R8,R9,FECHA";
     private static final DateTimeFormatter DATE_FORMAT =
             DateTimeFormatter.ofPattern("dd/MM/uuuu", Locale.ROOT);
 
+    private final DrawType type;
+    public HistoricalRepository() { this(DrawType.MS); }
+    public HistoricalRepository(DrawType type) { this.type = type; }
+
     public List<Contest> download() throws IOException {
-        HttpURLConnection connection = (HttpURLConnection) new URL(OFFICIAL_URL).openConnection();
+        HttpURLConnection connection = (HttpURLConnection) new URL(type.url).openConnection();
         connection.setConnectTimeout(15_000);
         connection.setReadTimeout(30_000);
         connection.setRequestProperty("User-Agent", "Octomind-Progol-Android/0.1");
@@ -58,7 +60,11 @@ public final class HistoricalRepository {
                 throw new IOException("El archivo historico esta vacio");
             }
             header = stripBom(header).trim();
-            if (!EXPECTED_HEADER.equals(header)) {
+            StringBuilder expected = new StringBuilder("NPRODUCTO,CONCURSO");
+            for (int slot = 1; slot <= type.slots; slot++) expected.append(",R").append(slot);
+            if (type == DrawType.WEEKEND) expected.append(",BOLSA");
+            expected.append(",FECHA");
+            if (!expected.toString().equals(header)) {
                 throw new IOException("El formato del historico oficial cambio");
             }
 
@@ -70,20 +76,21 @@ public final class HistoricalRepository {
                     continue;
                 }
                 String[] values = parseCsvLine(line);
-                if (values.length != 12) {
+                if (values.length != type.slots + (type == DrawType.WEEKEND ? 4 : 3)) {
                     throw new IOException("Linea " + lineNumber + " con columnas incompletas");
                 }
                 try {
                     int product = Integer.parseInt(values[0].trim());
                     int number = Integer.parseInt(values[1].trim());
+                    if (product != type.product) throw new IllegalArgumentException("Producto incorrecto");
                     if (!seenNumbers.add(number)) {
                         throw new IOException("Concurso duplicado: " + number);
                     }
-                    String[] results = new String[Contest.SLOT_COUNT];
-                    for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
+                    String[] results = new String[type.slots];
+                    for (int slot = 0; slot < type.slots; slot++) {
                         results[slot] = values[slot + 2].trim().toUpperCase(Locale.ROOT);
                     }
-                    LocalDate date = LocalDate.parse(values[11].trim(), DATE_FORMAT);
+                    LocalDate date = LocalDate.parse(values[values.length - 1].trim(), DATE_FORMAT);
                     contests.add(new Contest(product, number, date, results));
                 } catch (IllegalArgumentException | DateTimeParseException exception) {
                     throw new IOException("Dato invalido en la linea " + lineNumber, exception);

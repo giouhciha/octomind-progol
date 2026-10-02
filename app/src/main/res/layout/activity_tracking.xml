@@ -35,6 +35,12 @@
             android:textStyle="bold" />
 
         <Spinner
+            android:id="@+id/trackingDrawSelector"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:contentDescription="@string/draw_selector" />
+
+        <Spinner
             android:id="@+id/contestSpinner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
@@ -47,6 +53,30 @@
             android:background="@drawable/card_background"
             android:textColor="@color/ink"
             android:textSize="14sp" />
+
+        <LinearLayout
+            android:id="@+id/packageActions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="end"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/deletePersonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Eliminar personalizado"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/deleteAutomaticButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="Eliminar automático"
+                android:textAllCaps="false" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"

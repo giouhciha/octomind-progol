@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Octomind Progol</string>
-    <string name="title">Progol Media Semana</string>
+    <string name="title">Octomind Progol</string>
     <string name="subtitle">Pronóstico probabilístico del siguiente concurso</string>
     <string name="status_empty">Sin histórico local. Descarga los resultados oficiales para comenzar.</string>
     <string name="update_history">Actualizar histórico</string>
@@ -17,16 +17,18 @@
     <string name="tracking_empty">Todavía no hay pronósticos guardados.</string>
     <string name="tracking_read_error">No se pudieron leer los pronósticos guardados.</string>
     <string name="tracking_invalid">Pronóstico guardado no válido</string>
-    <string name="tracking_official_status">9 de 9 resultados · Validado con el histórico oficial</string>
+    <string name="tracking_official_status">%1$d de %1$d resultados · Validado con el histórico oficial</string>
     <string name="tracking_no_results">Sin resultados capturados · Selecciona L, E o V</string>
-    <string name="tracking_partial_status">%1$d de 9 resultados capturados · Guardado automáticamente</string>
+    <string name="tracking_partial_status">%1$d de %2$d resultados capturados · Guardado automáticamente</string>
     <string name="probability_title">Probabilidades por casilla</string>
     <string name="combinations_title">Paquete de combinaciones</string>
     <string name="previous_prediction">Anterior</string>
     <string name="next_prediction">Siguiente</string>
     <string name="swipe_hint">Desliza a la izquierda o derecha para cambiar</string>
     <string name="prediction_page">Pronóstico %1$d de %2$d</string>
-    <string name="combination_meta">Concurso estimado: %1$d · Modelo: %2$s</string>
+    <string name="combination_meta">Concurso estimado: %1$d</string>
+    <string name="draw_selector">Sorteo</string>
+    <string name="load_all_draws">Actualiza el histórico para cargar todos los sorteos de esta vista.</string>
     <string name="method_note">El paquete reparte las combinaciones entre composiciones L/E/V históricamente plausibles y después maximiza su diversidad. No representa una garantía de premio.</string>
     <string name="history_updated">%1$s\nActualización oficial completada.</string>
     <string name="error_detail">%1$s.\n%2$s</string>

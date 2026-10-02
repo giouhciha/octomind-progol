@@ -20,12 +20,21 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class DatabaseHelper extends SQLiteOpenHelper {
-    private static final String DATABASE_NAME = "octomind_progol.db";
-    private static final int DATABASE_VERSION = 2;
-    private static final int BACKUP_SCHEMA_VERSION = 2;
+    private final DrawType type;
+    private static final int DATABASE_VERSION = 4;
+    private static final int BACKUP_SCHEMA_VERSION = 4;
 
     public DatabaseHelper(Context context) {
-        super(context, DATABASE_NAME, null, DATABASE_VERSION);
+        this(context, DrawType.MS);
+    }
+
+    public DatabaseHelper(Context context, DrawType type) {
+        this(context, type, type.databaseName);
+    }
+
+    DatabaseHelper(Context context, DrawType type, String databaseName) {
+        super(context, databaseName, null, DATABASE_VERSION);
+        this.type = type;
     }
 
     @Override
@@ -35,9 +44,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                         + "number INTEGER PRIMARY KEY,"
                         + "product INTEGER NOT NULL,"
                         + "contest_date TEXT NOT NULL,"
-                        + "r1 TEXT NOT NULL,r2 TEXT NOT NULL,r3 TEXT NOT NULL,"
-                        + "r4 TEXT NOT NULL,r5 TEXT NOT NULL,r6 TEXT NOT NULL,"
-                        + "r7 TEXT NOT NULL,r8 TEXT NOT NULL,r9 TEXT NOT NULL)"
+                        + resultColumns(true) + ")"
         );
         database.execSQL(
                 "CREATE TABLE prediction_runs ("
@@ -45,10 +52,12 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                         + "created_at TEXT NOT NULL,"
                         + "source_contest INTEGER NOT NULL,"
                         + "target_contest INTEGER NOT NULL,"
+                        + "package_type TEXT NOT NULL DEFAULT 'AUTO',"
                         + "model_version TEXT NOT NULL,"
                         + "payload TEXT NOT NULL)"
         );
         createTrackedResultsTable(database);
+        createMatchNamesTable(database);
     }
 
     @Override
@@ -56,21 +65,72 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 2) {
             createTrackedResultsTable(database);
         }
+        if (oldVersion < 3) createMatchNamesTable(database);
+        if (oldVersion < 4) database.execSQL(
+                "ALTER TABLE prediction_runs ADD COLUMN package_type TEXT NOT NULL DEFAULT 'AUTO'");
+    }
+
+    private void createMatchNamesTable(SQLiteDatabase database) {
+        database.execSQL("CREATE TABLE IF NOT EXISTS match_names (contest_number INTEGER NOT NULL,"
+                + "slot INTEGER NOT NULL,local_name TEXT NOT NULL,visitor_name TEXT NOT NULL,"
+                + "PRIMARY KEY(contest_number,slot))");
+    }
+
+    public record TeamNames(String local, String visitor) { }
+
+    public List<TeamNames> getMatchNames(int contestNumber) {
+        List<TeamNames> names = new ArrayList<>();
+        for (int slot = 0; slot < type.slots; slot++) names.add(new TeamNames("", ""));
+        try (Cursor cursor = getReadableDatabase().query("match_names", null,
+                "contest_number = ?", new String[]{Integer.toString(contestNumber)}, null, null, null)) {
+            while (cursor.moveToNext()) {
+                int slot = cursor.getInt(cursor.getColumnIndexOrThrow("slot"));
+                names.set(slot, new TeamNames(cursor.getString(cursor.getColumnIndexOrThrow("local_name")),
+                        cursor.getString(cursor.getColumnIndexOrThrow("visitor_name"))));
+            }
+        }
+        return names;
+    }
+
+    private ContentValues nameValues(int contest, int slot, String local, String visitor) {
+        if (contest <= 0 || slot < 0 || slot >= type.slots || local == null || visitor == null
+                || local.length() > 120 || visitor.length() > 120)
+            throw new IllegalArgumentException("Nombres de equipos inválidos");
+        ContentValues values = new ContentValues();
+        values.put("contest_number", contest);
+        values.put("slot", slot);
+        values.put("local_name", local);
+        values.put("visitor_name", visitor);
+        return values;
+    }
+
+    public void saveMatchNames(int contest, int slot, String local, String visitor) {
+        getWritableDatabase().insertWithOnConflict("match_names", null,
+                nameValues(contest, slot, local, visitor), SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     private void createTrackedResultsTable(SQLiteDatabase database) {
         database.execSQL(
                 "CREATE TABLE IF NOT EXISTS tracked_results ("
                         + "contest_number INTEGER PRIMARY KEY,"
-                        + "r1 TEXT,r2 TEXT,r3 TEXT,r4 TEXT,r5 TEXT,"
-                        + "r6 TEXT,r7 TEXT,r8 TEXT,r9 TEXT,"
+                        + resultColumns(false) + ","
                         + "source TEXT NOT NULL,updated_at TEXT NOT NULL)"
         );
+    }
+
+    private String resultColumns(boolean required) {
+        List<String> columns = new ArrayList<>();
+        for (int i = 1; i <= type.slots; i++) columns.add("r" + i + " TEXT" + (required ? " NOT NULL" : ""));
+        return String.join(",", columns);
     }
 
     public void replaceContests(List<Contest> contests) {
         if (contests == null || contests.size() < 100) {
             throw new IllegalArgumentException("El historico validado esta incompleto");
+        }
+        for (Contest contest : contests) {
+            if (DrawType.identify(contest.product(), contest.results().length) != type)
+                throw new IllegalArgumentException("Histórico de otro sorteo");
         }
         SQLiteDatabase database = getWritableDatabase();
         database.beginTransaction();
@@ -81,7 +141,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 values.put("number", contest.number());
                 values.put("product", contest.product());
                 values.put("contest_date", contest.date().toString());
-                for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
+                for (int slot = 0; slot < type.slots; slot++) {
                     values.put("r" + (slot + 1), contest.result(slot));
                 }
                 if (database.insertOrThrow("contests", null, values) == -1) {
@@ -111,8 +171,8 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 LocalDate date = LocalDate.parse(
                         cursor.getString(cursor.getColumnIndexOrThrow("contest_date"))
                 );
-                String[] results = new String[Contest.SLOT_COUNT];
-                for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
+                String[] results = new String[type.slots];
+                for (int slot = 0; slot < type.slots; slot++) {
                     results[slot] = cursor.getString(
                             cursor.getColumnIndexOrThrow("r" + (slot + 1))
                     );
@@ -124,23 +184,51 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void savePrediction(PredictionEngine.Forecast forecast) {
+        savePrediction(forecast, "AUTO", false);
+    }
+
+    /** A deliberately chosen set of favorites may replace an unplayed package. */
+    public void savePrediction(PredictionEngine.Forecast forecast, boolean replaceExisting) {
+        savePrediction(forecast, replaceExisting ? "PERSONAL" : "AUTO", replaceExisting);
+    }
+
+    public void savePrediction(PredictionEngine.Forecast forecast, String packageType, boolean replaceExisting) {
+        if (!"AUTO".equals(packageType) && !"PERSONAL".equals(packageType))
+            throw new IllegalArgumentException("Tipo de paquete inválido");
+        try (Cursor cursor = getReadableDatabase().query("prediction_runs", new String[]{"id"},
+                "target_contest = ? AND package_type = ?", new String[]{Integer.toString(forecast.targetContest()), packageType}, null, null, null)) {
+            if (cursor.moveToFirst() && !replaceExisting) return;
+        }
+        if (replaceExisting) getWritableDatabase().delete("prediction_runs", "target_contest = ? AND package_type = ?",
+                new String[]{Integer.toString(forecast.targetContest()), packageType});
         ContentValues values = new ContentValues();
         values.put("created_at", Instant.now().toString());
         values.put("source_contest", forecast.sourceContest());
         values.put("target_contest", forecast.targetContest());
-        values.put("model_version", PredictionEngine.MODEL_VERSION);
+        values.put("package_type", packageType);
+        values.put("model_version", forecast.modelVersion());
         values.put("payload", forecast.toJson().toString());
         getWritableDatabase().insertOrThrow("prediction_runs", null, values);
     }
 
+    public void deletePredictionPackage(int contestNumber, String packageType) {
+        if (!"AUTO".equals(packageType) && !"PERSONAL".equals(packageType))
+            throw new IllegalArgumentException("Tipo de paquete inválido");
+        getWritableDatabase().delete("prediction_runs",
+                "target_contest = ? AND package_type = ?",
+                new String[]{Integer.toString(contestNumber), packageType});
+    }
+
     public List<PredictionSnapshot> getPredictionSnapshots() throws JSONException {
-        Map<Integer, PredictionSnapshot> latestByContest = new LinkedHashMap<>();
+        Map<String, PredictionSnapshot> latestByContest = new LinkedHashMap<>();
         try (Cursor cursor = getReadableDatabase().query(
                 "prediction_runs", null, null, null, null, null, "id DESC"
         )) {
             while (cursor.moveToNext()) {
                 int target = cursor.getInt(cursor.getColumnIndexOrThrow("target_contest"));
-                if (latestByContest.containsKey(target)) {
+                String packageType = cursor.getString(cursor.getColumnIndexOrThrow("package_type"));
+                String key = target + ":" + packageType;
+                if (latestByContest.containsKey(key)) {
                     continue;
                 }
                 JSONObject payload = new JSONObject(
@@ -150,21 +238,24 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 List<String> sequences = new ArrayList<>();
                 for (int index = 0; index < rows.length(); index++) {
                     String sequence = rows.getJSONObject(index).getString("sequence");
-                    if (sequence.length() != Contest.SLOT_COUNT) {
+                    if (sequence.length() != type.slots) {
                         throw new JSONException("Pronostico guardado incompleto");
                     }
                     sequences.add(sequence);
                 }
-                latestByContest.put(target, new PredictionSnapshot(target, sequences));
+                latestByContest.put(key, new PredictionSnapshot(target, packageType, sequences));
             }
         }
         List<PredictionSnapshot> snapshots = new ArrayList<>(latestByContest.values());
-        snapshots.sort((left, right) -> Integer.compare(right.contestNumber(), left.contestNumber()));
+        snapshots.sort((left, right) -> {
+            int contest = Integer.compare(right.contestNumber(), left.contestNumber());
+            return contest != 0 ? contest : left.packageType().compareTo(right.packageType());
+        });
         return snapshots;
     }
 
     public TrackedResults getTrackedResults(int contestNumber) {
-        String[] results = new String[Contest.SLOT_COUNT];
+        String[] results = new String[type.slots];
         String source = "USER";
         try (Cursor cursor = getReadableDatabase().query(
                 "tracked_results", null, "contest_number = ?",
@@ -172,7 +263,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
         )) {
             if (cursor.moveToFirst()) {
                 source = cursor.getString(cursor.getColumnIndexOrThrow("source"));
-                for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
+                for (int slot = 0; slot < type.slots; slot++) {
                     results[slot] = cursor.getString(
                             cursor.getColumnIndexOrThrow("r" + (slot + 1))
                     );
@@ -183,7 +274,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void saveTrackedResult(int contestNumber, int slot, String state) {
-        if (slot < 0 || slot >= Contest.SLOT_COUNT) {
+        if (slot < 0 || slot >= type.slots) {
             throw new IllegalArgumentException("Casilla invalida");
         }
         if (state != null && !Contest.isValidState(state)) {
@@ -241,7 +332,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
     private ContentValues trackedValues(int contestNumber, String[] results, String source) {
         ContentValues values = new ContentValues();
         values.put("contest_number", contestNumber);
-        for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
+        for (int slot = 0; slot < type.slots; slot++) {
             if (results[slot] == null) {
                 values.putNull("r" + (slot + 1));
             } else {
@@ -257,7 +348,8 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
         JSONObject root = new JSONObject();
         root.put("schemaVersion", BACKUP_SCHEMA_VERSION);
         root.put("createdAt", Instant.now().toString());
-        root.put("modelVersion", PredictionEngine.MODEL_VERSION);
+        root.put("modelVersion", type.modelVersion());
+        root.put("drawType", type.name());
 
         JSONArray contestArray = new JSONArray();
         for (Contest contest : getAllContests()) {
@@ -283,6 +375,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 item.put("createdAt", cursor.getString(cursor.getColumnIndexOrThrow("created_at")));
                 item.put("sourceContest", cursor.getInt(cursor.getColumnIndexOrThrow("source_contest")));
                 item.put("targetContest", cursor.getInt(cursor.getColumnIndexOrThrow("target_contest")));
+                item.put("packageType", cursor.getString(cursor.getColumnIndexOrThrow("package_type")));
                 item.put("modelVersion", cursor.getString(cursor.getColumnIndexOrThrow("model_version")));
                 item.put("payload", new JSONObject(
                         cursor.getString(cursor.getColumnIndexOrThrow("payload"))
@@ -303,7 +396,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 ));
                 item.put("source", cursor.getString(cursor.getColumnIndexOrThrow("source")));
                 JSONArray results = new JSONArray();
-                for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
+                for (int slot = 0; slot < type.slots; slot++) {
                     String value = cursor.getString(
                             cursor.getColumnIndexOrThrow("r" + (slot + 1))
                     );
@@ -314,11 +407,27 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
             }
         }
         root.put("trackedResults", tracked);
+        JSONArray names = new JSONArray();
+        try (Cursor cursor = getReadableDatabase().query("match_names", null, null, null,
+                null, null, "contest_number ASC, slot ASC")) {
+            while (cursor.moveToNext()) {
+                JSONObject item = new JSONObject();
+                item.put("contestNumber", cursor.getInt(cursor.getColumnIndexOrThrow("contest_number")));
+                item.put("slot", cursor.getInt(cursor.getColumnIndexOrThrow("slot")));
+                item.put("local", cursor.getString(cursor.getColumnIndexOrThrow("local_name")));
+                item.put("visitor", cursor.getString(cursor.getColumnIndexOrThrow("visitor_name")));
+                names.put(item);
+            }
+        }
+        root.put("matchNames", names);
         return root.toString(2);
     }
 
-    public int restoreBackup(String jsonText) throws JSONException {
+    public int restoreBackup(String jsonText) throws JSONException { return restoreBackup(jsonText, false); }
+
+    public int restoreBackup(String jsonText, boolean validateOnly) throws JSONException {
         JSONObject root = new JSONObject(jsonText);
+        if (!type.name().equals(root.optString("drawType", "MS"))) throw new JSONException("Respaldo de otro sorteo");
         int schemaVersion = root.getInt("schemaVersion");
         if (schemaVersion < 1 || schemaVersion > BACKUP_SCHEMA_VERSION) {
             throw new JSONException("Version de respaldo no compatible");
@@ -329,11 +438,11 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
         for (int index = 0; index < contestArray.length(); index++) {
             JSONObject item = contestArray.getJSONObject(index);
             JSONArray jsonResults = item.getJSONArray("results");
-            if (jsonResults.length() != Contest.SLOT_COUNT) {
+            if (jsonResults.length() != type.slots) {
                 throw new JSONException("Concurso con resultados incompletos");
             }
-            String[] results = new String[Contest.SLOT_COUNT];
-            for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
+            String[] results = new String[type.slots];
+            for (int slot = 0; slot < type.slots; slot++) {
                 results[slot] = jsonResults.getString(slot);
             }
             Contest contest = new Contest(
@@ -345,9 +454,10 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
             if (!contestNumbers.add(contest.number())) {
                 throw new JSONException("Concurso duplicado en el respaldo");
             }
+            if (DrawType.identify(contest.product(), contest.results().length) != type) throw new JSONException("Sorteo incorrecto");
             contests.add(contest);
         }
-        if (contests.size() < 100) {
+        if (!contests.isEmpty() && contests.size() < 100) {
             throw new JSONException("El historico del respaldo esta incompleto");
         }
 
@@ -360,8 +470,18 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 values.put("created_at", Instant.parse(item.getString("createdAt")).toString());
                 values.put("source_contest", item.getInt("sourceContest"));
                 values.put("target_contest", item.getInt("targetContest"));
+                String packageType = item.optString("packageType", "AUTO");
+                if (!"AUTO".equals(packageType) && !"PERSONAL".equals(packageType)) throw new JSONException("Tipo de paquete inválido");
+                values.put("package_type", packageType);
                 values.put("model_version", item.getString("modelVersion"));
-                values.put("payload", item.getJSONObject("payload").toString());
+                JSONObject payload = item.getJSONObject("payload");
+                JSONArray picks = payload.getJSONArray("recommendations");
+                if (picks.length() != 20) throw new JSONException("Se requieren 20 pronósticos");
+                for (int pick = 0; pick < picks.length(); pick++) {
+                    String sequence = picks.getJSONObject(pick).getString("sequence");
+                    if (!sequence.matches("[LEV]{" + type.slots + "}")) throw new JSONException("Pronóstico inválido");
+                }
+                values.put("payload", payload.toString());
                 predictionValues.add(values);
             }
         }
@@ -377,11 +497,11 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                     throw new JSONException("Seguimiento duplicado en el respaldo");
                 }
                 JSONArray results = item.getJSONArray("results");
-                if (results.length() != Contest.SLOT_COUNT) {
+                if (results.length() != type.slots) {
                     throw new JSONException("Seguimiento incompleto en el respaldo");
                 }
-                String[] states = new String[Contest.SLOT_COUNT];
-                for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
+                String[] states = new String[type.slots];
+                for (int slot = 0; slot < type.slots; slot++) {
                     if (!results.isNull(slot)) {
                         states[slot] = results.getString(slot);
                         if (!Contest.isValidState(states[slot])) {
@@ -397,6 +517,18 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
             }
         }
 
+        List<ContentValues> names = new ArrayList<>();
+        JSONArray nameArray = root.optJSONArray("matchNames");
+        Set<String> nameKeys = new HashSet<>();
+        if (nameArray != null) {
+            for (int index = 0; index < nameArray.length(); index++) {
+                JSONObject item = nameArray.getJSONObject(index);
+                int contest = item.getInt("contestNumber"), slot = item.getInt("slot");
+                if (!nameKeys.add(contest + ":" + slot)) throw new JSONException("Partido duplicado");
+                names.add(nameValues(contest, slot, item.getString("local"), item.getString("visitor")));
+            }
+        }
+        if (validateOnly) return contests.size();
         SQLiteDatabase database = getWritableDatabase();
         database.beginTransaction();
         try {
@@ -406,7 +538,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 values.put("number", contest.number());
                 values.put("product", contest.product());
                 values.put("contest_date", contest.date().toString());
-                for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
+                for (int slot = 0; slot < type.slots; slot++) {
                     values.put("r" + (slot + 1), contest.result(slot));
                 }
                 database.insertOrThrow("contests", null, values);
@@ -419,14 +551,17 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
             for (ContentValues values : trackedValues) {
                 database.insertOrThrow("tracked_results", null, values);
             }
+            database.delete("match_names", null, null);
+            for (ContentValues values : names) database.insertOrThrow("match_names", null, values);
             database.setTransactionSuccessful();
         } finally {
             database.endTransaction();
         }
+        reconcileTrackedResults(contests);
         return contests.size();
     }
 
-    public record PredictionSnapshot(int contestNumber, List<String> sequences) {
+    public record PredictionSnapshot(int contestNumber, String packageType, List<String> sequences) {
         public PredictionSnapshot {
             sequences = List.copyOf(sequences);
         }

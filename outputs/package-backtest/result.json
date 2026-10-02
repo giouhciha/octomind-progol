@@ -1,0 +1,287 @@
+{
+  "step": 5,
+  "draws": [
+    {
+      "draw": "MS",
+      "slots": 9,
+      "history": 811,
+      "champion": "prior_40_div_20",
+      "development": {
+        "prior_0_div_0": {
+          "contests": 100,
+          "mean_best_hits": 5.49,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.04,
+          "perfect": 0.0
+        },
+        "prior_10_div_0": {
+          "contests": 100,
+          "mean_best_hits": 5.48,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.04,
+          "perfect": 0.0
+        },
+        "prior_20_div_0": {
+          "contests": 100,
+          "mean_best_hits": 5.48,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.04,
+          "perfect": 0.0
+        },
+        "prior_20_div_20": {
+          "contests": 100,
+          "mean_best_hits": 6.0,
+          "median_best_hits": 6,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_20_div_50": {
+          "contests": 100,
+          "mean_best_hits": 6.0,
+          "median_best_hits": 6,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_40_div_20": {
+          "contests": 100,
+          "mean_best_hits": 6.0,
+          "median_best_hits": 6,
+          "at_least_slots_minus_1": 0.01,
+          "perfect": 0.0
+        }
+      },
+      "holdout": {
+        "prior_0_div_0": {
+          "contests": 43,
+          "mean_best_hits": 5.4419,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.0233,
+          "perfect": 0.0233
+        },
+        "prior_10_div_0": {
+          "contests": 43,
+          "mean_best_hits": 5.4419,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.0233,
+          "perfect": 0.0233
+        },
+        "prior_20_div_0": {
+          "contests": 43,
+          "mean_best_hits": 5.4419,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.0233,
+          "perfect": 0.0233
+        },
+        "prior_20_div_20": {
+          "contests": 43,
+          "mean_best_hits": 6.093,
+          "median_best_hits": 6,
+          "at_least_slots_minus_1": 0.0465,
+          "perfect": 0.0
+        },
+        "prior_20_div_50": {
+          "contests": 43,
+          "mean_best_hits": 6.093,
+          "median_best_hits": 6,
+          "at_least_slots_minus_1": 0.0465,
+          "perfect": 0.0
+        },
+        "prior_40_div_20": {
+          "contests": 43,
+          "mean_best_hits": 6.093,
+          "median_best_hits": 6,
+          "at_least_slots_minus_1": 0.0465,
+          "perfect": 0.0
+        }
+      }
+    },
+    {
+      "draw": "WEEKEND",
+      "slots": 14,
+      "history": 1575,
+      "champion": "prior_40_div_20",
+      "development": {
+        "prior_0_div_0": {
+          "contests": 207,
+          "mean_best_hits": 8.058,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_10_div_0": {
+          "contests": 207,
+          "mean_best_hits": 8.0628,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_20_div_0": {
+          "contests": 207,
+          "mean_best_hits": 8.0628,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_20_div_20": {
+          "contests": 207,
+          "mean_best_hits": 8.3043,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_20_div_50": {
+          "contests": 207,
+          "mean_best_hits": 8.3043,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_40_div_20": {
+          "contests": 207,
+          "mean_best_hits": 8.314,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        }
+      },
+      "holdout": {
+        "prior_0_div_0": {
+          "contests": 88,
+          "mean_best_hits": 7.7955,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_10_div_0": {
+          "contests": 88,
+          "mean_best_hits": 7.7955,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_20_div_0": {
+          "contests": 88,
+          "mean_best_hits": 7.7955,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_20_div_20": {
+          "contests": 88,
+          "mean_best_hits": 8.2045,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_20_div_50": {
+          "contests": 88,
+          "mean_best_hits": 8.2045,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        },
+        "prior_40_div_20": {
+          "contests": 88,
+          "mean_best_hits": 8.2045,
+          "median_best_hits": 8,
+          "at_least_slots_minus_1": 0.0,
+          "perfect": 0.0
+        }
+      }
+    },
+    {
+      "draw": "REVANCHA",
+      "slots": 7,
+      "history": 929,
+      "champion": "prior_20_div_20",
+      "development": {
+        "prior_0_div_0": {
+          "contests": 116,
+          "mean_best_hits": 4.7586,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.1724,
+          "perfect": 0.0172
+        },
+        "prior_10_div_0": {
+          "contests": 116,
+          "mean_best_hits": 4.7586,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.1724,
+          "perfect": 0.0172
+        },
+        "prior_20_div_0": {
+          "contests": 116,
+          "mean_best_hits": 4.7586,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.1724,
+          "perfect": 0.0172
+        },
+        "prior_20_div_20": {
+          "contests": 116,
+          "mean_best_hits": 4.9914,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.1983,
+          "perfect": 0.0259
+        },
+        "prior_20_div_50": {
+          "contests": 116,
+          "mean_best_hits": 4.9914,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.1983,
+          "perfect": 0.0259
+        },
+        "prior_40_div_20": {
+          "contests": 116,
+          "mean_best_hits": 4.9828,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.1897,
+          "perfect": 0.0259
+        }
+      },
+      "holdout": {
+        "prior_0_div_0": {
+          "contests": 50,
+          "mean_best_hits": 4.68,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.18,
+          "perfect": 0.0
+        },
+        "prior_10_div_0": {
+          "contests": 50,
+          "mean_best_hits": 4.68,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.18,
+          "perfect": 0.0
+        },
+        "prior_20_div_0": {
+          "contests": 50,
+          "mean_best_hits": 4.68,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.18,
+          "perfect": 0.0
+        },
+        "prior_20_div_20": {
+          "contests": 50,
+          "mean_best_hits": 4.86,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.1,
+          "perfect": 0.0
+        },
+        "prior_20_div_50": {
+          "contests": 50,
+          "mean_best_hits": 4.86,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.1,
+          "perfect": 0.0
+        },
+        "prior_40_div_20": {
+          "contests": 50,
+          "mean_best_hits": 4.86,
+          "median_best_hits": 5,
+          "at_least_slots_minus_1": 0.1,
+          "perfect": 0.0
+        }
+      }
+    }
+  ]
+}

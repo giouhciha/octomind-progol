@@ -19,14 +19,28 @@ public final class PredictionEngine {
     private static final double DIVERSITY_WEIGHT = 0.20;
     private static final int DEFAULT_PACKAGE_SIZE = 20;
 
+    private final DrawType type;
+    public PredictionEngine() { this(DrawType.MS); }
+    public PredictionEngine(DrawType type) { this.type = type; }
+
     public Forecast analyze(List<Contest> history) {
+        return analyze(history, new String[type.slots]);
+    }
+
+    /** Fixed picks are intentionally excluded from the likelihood score. */
+    public Forecast analyze(List<Contest> history, String[] fixedStates) {
         if (history == null || history.size() < 100) {
             throw new IllegalArgumentException("Se requieren al menos 100 concursos");
         }
+        for (Contest contest : history) {
+            if (DrawType.identify(contest.product(), contest.results().length) != type)
+                throw new IllegalArgumentException("Histórico de otro sorteo");
+        }
+        validateFixedStates(fixedStates);
         int sourceContest = history.stream().mapToInt(Contest::number).max().orElseThrow();
         double[] global = globalProbabilities(history);
-        double[][] slotProbabilities = new double[Contest.SLOT_COUNT][STATES.length];
-        for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
+        double[][] slotProbabilities = new double[type.slots][STATES.length];
+        for (int slot = 0; slot < type.slots; slot++) {
             slotProbabilities[slot] = Arrays.copyOf(global, global.length);
         }
         Map<Composition, Double> compositionProbabilities =
@@ -34,7 +48,8 @@ public final class PredictionEngine {
         List<Recommendation> recommendations = recommend(
                 slotProbabilities,
                 compositionProbabilities,
-                DEFAULT_PACKAGE_SIZE
+                DEFAULT_PACKAGE_SIZE,
+                fixedStates
         );
         return new Forecast(
                 sourceContest,
@@ -43,6 +58,15 @@ public final class PredictionEngine {
                 slotProbabilities,
                 recommendations
         );
+    }
+
+    private void validateFixedStates(String[] fixedStates) {
+        if (fixedStates == null || fixedStates.length != type.slots)
+            throw new IllegalArgumentException("Favoritos incompletos");
+        for (String state : fixedStates) {
+            if (state != null && !Contest.isValidState(state))
+                throw new IllegalArgumentException("Favorito inválido");
+        }
     }
 
     static double[] globalProbabilities(List<Contest> history) {
@@ -66,10 +90,11 @@ public final class PredictionEngine {
         }
 
         Map<Composition, Double> probabilities = new HashMap<>();
+        int slots = history.get(0).results().length;
         double denominator = history.size() + COMPOSITION_PRIOR_STRENGTH;
-        for (int local = 0; local <= Contest.SLOT_COUNT; local++) {
-            for (int draw = 0; draw <= Contest.SLOT_COUNT - local; draw++) {
-                int away = Contest.SLOT_COUNT - local - draw;
+        for (int local = 0; local <= slots; local++) {
+            for (int draw = 0; draw <= slots - local; draw++) {
+                int away = slots - local - draw;
                 Composition composition = new Composition(local, draw, away);
                 double prior = multinomialProbability(composition, global);
                 double probability = (
@@ -87,9 +112,22 @@ public final class PredictionEngine {
             Map<Composition, Double> compositionProbabilities,
             int quantity
     ) {
+        return recommend(slotProbabilities, compositionProbabilities, quantity,
+                new String[slotProbabilities.length]);
+    }
+
+    static List<Recommendation> recommend(
+            double[][] slotProbabilities,
+            Map<Composition, Double> compositionProbabilities,
+            int quantity,
+            String[] fixedStates
+    ) {
+        if (fixedStates == null || fixedStates.length != slotProbabilities.length)
+            throw new IllegalArgumentException("Favoritos incompletos");
         Map<Composition, Integer> quotas = allocateQuotas(
                 compositionProbabilities,
-                quantity
+                quantity,
+                fixedStates
         );
         Map<Composition, List<Candidate>> candidates = new HashMap<>();
         for (Map.Entry<Composition, Integer> entry : quotas.entrySet()) {
@@ -98,19 +136,33 @@ public final class PredictionEngine {
             }
         }
 
-        int universe = (int) Math.pow(STATES.length, Contest.SLOT_COUNT);
+        int slots = slotProbabilities.length;
+        int universe = (int) Math.pow(STATES.length, slots);
+        java.util.Random random = new java.util.Random(731L);
+        Map<Composition, Integer> seen = new HashMap<>();
+        final int maxPerComposition = 1500;
         for (int encoded = 0; encoded < universe; encoded++) {
-            char[] sequence = decode(encoded);
+            char[] sequence = decode(encoded, slots);
+            if (!matchesFixed(sequence, fixedStates)) continue;
             Composition composition = Composition.from(sequence);
             List<Candidate> bucket = candidates.get(composition);
             if (bucket == null) {
                 continue;
             }
             double probability = 1.0;
-            for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
-                probability *= slotProbabilities[slot][stateIndex(sequence[slot])];
+            for (int slot = 0; slot < slots; slot++) {
+                if (fixedStates[slot] == null)
+                    probability *= slotProbabilities[slot][stateIndex(sequence[slot])];
             }
-            bucket.add(new Candidate(sequence, composition, probability, maximumRun(sequence)));
+            // Reservoir sampling bounds memory for the 14-match universe. MS and Revancha stay exhaustive.
+            int count = seen.merge(composition, 1, Integer::sum);
+            if (slots <= 9 || bucket.size() < maxPerComposition) {
+                bucket.add(new Candidate(sequence, composition, probability, maximumRun(sequence)));
+            } else {
+                int replace = random.nextInt(count);
+                if (replace < maxPerComposition) bucket.set(replace,
+                        new Candidate(sequence, composition, probability, maximumRun(sequence)));
+            }
         }
 
         List<Composition> tasks = new ArrayList<>();
@@ -167,15 +219,24 @@ public final class PredictionEngine {
         return output;
     }
 
+    private static boolean matchesFixed(char[] sequence, String[] fixedStates) {
+        for (int slot = 0; slot < sequence.length; slot++) {
+            if (fixedStates[slot] != null && sequence[slot] != fixedStates[slot].charAt(0)) return false;
+        }
+        return true;
+    }
+
     private static Map<Composition, Integer> allocateQuotas(
             Map<Composition, Double> probabilities,
-            int quantity
+            int quantity,
+            String[] fixedStates
     ) {
         Map<Composition, Integer> quotas = new HashMap<>();
         List<Composition> compositions = new ArrayList<>(probabilities.keySet());
         int allocated = 0;
         for (Composition composition : compositions) {
-            int quota = (int) Math.floor(quantity * probabilities.get(composition));
+            int quota = (int) Math.min(availableCount(composition, fixedStates),
+                    Math.floor(quantity * probabilities.get(composition)));
             quotas.put(composition, quota);
             allocated += quota;
         }
@@ -185,11 +246,32 @@ public final class PredictionEngine {
                 )).thenComparingDouble(composition -> -probabilities.get(composition))
                         .thenComparing(Composition::key)
         );
-        for (int index = 0; index < quantity - allocated; index++) {
-            Composition composition = compositions.get(index);
-            quotas.put(composition, quotas.get(composition) + 1);
+        while (allocated < quantity) {
+            boolean progressed = false;
+            for (Composition composition : compositions) {
+                if (allocated == quantity) break;
+                if (quotas.get(composition) >= availableCount(composition, fixedStates)) continue;
+                quotas.put(composition, quotas.get(composition) + 1);
+                allocated++;
+                progressed = true;
+            }
+            if (!progressed) throw new IllegalArgumentException("Paquete mayor que el universo");
         }
         return quotas;
+    }
+
+    private static long availableCount(Composition composition, String[] fixedStates) {
+        int fixedLocal = 0, fixedDraw = 0, fixedAway = 0;
+        for (String state : fixedStates) {
+            if ("L".equals(state)) fixedLocal++;
+            else if ("E".equals(state)) fixedDraw++;
+            else if ("V".equals(state)) fixedAway++;
+        }
+        int local = composition.local - fixedLocal;
+        int draw = composition.draw - fixedDraw;
+        int away = composition.away - fixedAway;
+        if (local < 0 || draw < 0 || away < 0) return 0;
+        return factorial(local + draw + away) / (factorial(local) * factorial(draw) * factorial(away));
     }
 
     private static boolean isPreferredTie(Candidate left, Candidate right) {
@@ -225,10 +307,10 @@ public final class PredictionEngine {
         return maximum;
     }
 
-    private static char[] decode(int encoded) {
-        char[] sequence = new char[Contest.SLOT_COUNT];
+    private static char[] decode(int encoded, int slots) {
+        char[] sequence = new char[slots];
         int remaining = encoded;
-        for (int slot = Contest.SLOT_COUNT - 1; slot >= 0; slot--) {
+        for (int slot = slots - 1; slot >= 0; slot--) {
             sequence[slot] = STATES[remaining % STATES.length];
             remaining /= STATES.length;
         }
@@ -256,7 +338,7 @@ public final class PredictionEngine {
     }
 
     private static long multinomialCount(Composition composition) {
-        return factorial(Contest.SLOT_COUNT)
+        return factorial(composition.local + composition.draw + composition.away)
                 / (factorial(composition.local)
                 * factorial(composition.draw)
                 * factorial(composition.away));
@@ -422,6 +504,7 @@ public final class PredictionEngine {
             this.recommendations = List.copyOf(recommendations);
         }
 
+        public String modelVersion() { return probabilities.length == 14 ? DrawType.WEEKEND.modelVersion() : probabilities.length == 7 ? DrawType.REVANCHA.modelVersion() : MODEL_VERSION; }
         public int sourceContest() { return sourceContest; }
         public int targetContest() { return targetContest; }
         public int historicalContests() { return historicalContests; }
@@ -434,7 +517,7 @@ public final class PredictionEngine {
                 root.put("sourceContest", sourceContest);
                 root.put("targetContest", targetContest);
                 root.put("historicalContests", historicalContests);
-                root.put("modelVersion", MODEL_VERSION);
+                root.put("modelVersion", modelVersion());
                 JSONArray probabilityRows = new JSONArray();
                 for (double[] row : probabilities) {
                     JSONObject item = new JSONObject();
@@ -465,4 +548,3 @@ public final class PredictionEngine {
         }
     }
 }
-

@@ -10,10 +10,10 @@ android {
         applicationId = "mx.octomind.progol"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.3.2"
+        versionCode = 13
+        versionName = "0.4.7"
 
-        testInstrumentationRunner = "android.test.InstrumentationTestRunner"
+        testInstrumentationRunner = "mx.octomind.progol.IntegrationInstrumentation"
     }
 
     buildTypes {
@@ -34,6 +34,19 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+    sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("qa-assets"))
+}
+
+val debugArtifactVersion = android.defaultConfig.versionName!!.replace(".", "-")
+val copyVersionedDebugApk = tasks.register<Copy>("copyVersionedDebugApk") {
+    dependsOn("assembleDebug")
+    from(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
+    into(layout.buildDirectory.dir("outputs/apk/versioned"))
+    rename { "debug-$debugArtifactVersion.apk" }
+}
+
+tasks.matching { it.name == "assembleDebug" }.configureEach {
+    finalizedBy(copyVersionedDebugApk)
 }
 
 dependencies {

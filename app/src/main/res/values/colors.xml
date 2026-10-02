@@ -9,4 +9,5 @@
     <color name="divider">#D2E5DC</color>
     <color name="pick_green">#16A66A</color>
     <color name="row_surface">#F4F9F7</color>
+    <color name="result_error">#C53A3A</color>
 </resources>
