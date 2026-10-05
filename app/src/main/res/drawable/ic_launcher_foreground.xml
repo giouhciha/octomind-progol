@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Primer plano del icono adaptativo: pulpo kawaii dentro de la zona segura.
+     Disenado en 48x48 y escalado 2.4x con centro en (54,54). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="2.4"
+        android:scaleY="2.4"
+        android:pivotX="24"
+        android:pivotY="24">
+        <group android:translateY="1.5">
+            <!-- Tentaculos -->
+            <path
+                android:fillColor="#F4FFFA"
+                android:strokeColor="@color/primary_dark"
+                android:strokeWidth="1.1"
+                android:pathData="M9.5,30 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z" />
+            <path
+                android:fillColor="#F4FFFA"
+                android:strokeColor="@color/primary_dark"
+                android:strokeWidth="1.1"
+                android:pathData="M16.5,30 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z" />
+            <path
+                android:fillColor="#F4FFFA"
+                android:strokeColor="@color/primary_dark"
+                android:strokeWidth="1.1"
+                android:pathData="M23.5,30 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z" />
+            <path
+                android:fillColor="#F4FFFA"
+                android:strokeColor="@color/primary_dark"
+                android:strokeWidth="1.1"
+                android:pathData="M30.5,30 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z" />
+
+            <!-- Cabeza -->
+            <path
+                android:fillColor="#F4FFFA"
+                android:strokeColor="@color/primary_dark"
+                android:strokeWidth="1.1"
+                android:pathData="M11,19 a13,11 0 1 0 26,0 a13,11 0 1 0 -26,0 z" />
+
+            <!-- Brillo de la cabeza -->
+            <path
+                android:fillColor="#8CFFFFFF"
+                android:pathData="M14.8,13 a3.2,1.8 0 1 0 6.4,0 a3.2,1.8 0 1 0 -6.4,0 z" />
+
+            <!-- Mejillas -->
+            <path
+                android:fillColor="#E6FF9DB0"
+                android:pathData="M12.3,21.5 a2.2,1.4 0 1 0 4.4,0 a2.2,1.4 0 1 0 -4.4,0 z" />
+            <path
+                android:fillColor="#E6FF9DB0"
+                android:pathData="M31.3,21.5 a2.2,1.4 0 1 0 4.4,0 a2.2,1.4 0 1 0 -4.4,0 z" />
+
+            <!-- Ojos -->
+            <path
+                android:fillColor="@color/ink"
+                android:pathData="M16.7,18 a2.3,3 0 1 0 4.6,0 a2.3,3 0 1 0 -4.6,0 z" />
+            <path
+                android:fillColor="@color/ink"
+                android:pathData="M26.7,18 a2.3,3 0 1 0 4.6,0 a2.3,3 0 1 0 -4.6,0 z" />
+
+            <!-- Destellos -->
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M17.2,16.6 a0.9,0.9 0 1 0 1.8,0 a0.9,0.9 0 1 0 -1.8,0 z" />
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M27.2,16.6 a0.9,0.9 0 1 0 1.8,0 a0.9,0.9 0 1 0 -1.8,0 z" />
+
+            <!-- Boca -->
+            <path
+                android:fillColor="#00000000"
+                android:strokeColor="@color/ink"
+                android:strokeWidth="1.0"
+                android:strokeLineCap="round"
+                android:pathData="M22,22.6 q2,2.4 4,0" />
+        </group>
+    </group>
+</vector>

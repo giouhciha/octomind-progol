@@ -18,6 +18,8 @@ import android.widget.Spinner;
 import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
 import org.json.JSONObject;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.Map;
 import android.widget.LinearLayout;
@@ -143,14 +145,16 @@ public final class MainActivity extends Activity {
             choices.setOrientation(RadioGroup.HORIZONTAL);
             addFavoriteOption(choices, "—"); addFavoriteOption(choices, "L");
             addFavoriteOption(choices, "E"); addFavoriteOption(choices, "V");
+            addFavoriteOption(choices, "✕L"); addFavoriteOption(choices, "✕E");
+            addFavoriteOption(choices, "✕V");
             choices.check(choices.getChildAt(0).getId());
             row.addView(choices, new LinearLayout.LayoutParams(0, dp(40), 1));
             rows.addView(row); groups.add(choices);
         }
         ScrollView scroll = new ScrollView(this); scroll.addView(rows);
-        String title = type.label + " · favoritos opcionales";
+        String title = type.label + " · favoritos y descartes";
         new AlertDialog.Builder(this).setTitle(title)
-                .setMessage("Fija hasta " + limit + " casilla" + (limit == 1 ? "." : "s. Estas no entrarán al análisis."))
+                .setMessage("Fija (L/E/V) o prohíbe (✕L/✕E/✕V) hasta " + limit + " casilla" + (limit == 1 ? "." : "s. Las fijadas no entran al análisis; las prohibidas se excluyen."))
                 .setView(scroll)
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton(index + 1 == types.length ? "Calcular" : "Continuar", (dialog, which) -> {
@@ -158,16 +162,26 @@ public final class MainActivity extends Activity {
                     for (int slot = 0; slot < groups.size(); slot++) {
                         RadioButton chosen = groups.get(slot).findViewById(groups.get(slot).getCheckedRadioButtonId());
                         String state = chosen == null ? "—" : chosen.getText().toString();
-                        if (!"—".equals(state)) { selections[slot] = state; count++; }
+                        if (state.startsWith("✕")) { selections[slot] = Character.toString(Character.toLowerCase(state.charAt(1))); count++; }
+                        else if (!"—".equals(state)) { selections[slot] = state; count++; }
                     }
-                    if (count > limit) { toast("Máximo " + limit + " favorito" + (limit == 1 ? "" : "s") + " para " + type.label); return; }
-                    favorites.put(type, selections);
+                    if (count > limit) { toast("Máximo " + limit + " casilla" + (limit == 1 ? "" : "s") + " para " + type.label); return; }
+                    // Sin restricciones no se registra el sorteo: solo se calcula el paquete automatico.
+                    if (count > 0) favorites.put(type, selections);
                     showFavoritesStep(types, index + 1, favorites);
                 }).show();
     }
 
     private int favoriteLimit(DrawType type) {
         return type == DrawType.MS ? 2 : type == DrawType.WEEKEND ? 4 : 1;
+    }
+
+    private static boolean hasFavorites(String[] states) {
+        if (states == null) return false;
+        for (String state : states) {
+            if (state != null) return true;
+        }
+        return false;
     }
 
     private void addFavoriteOption(RadioGroup group, String state) {
@@ -205,6 +219,7 @@ public final class MainActivity extends Activity {
                 }
                 Map<DrawType, PredictionEngine.Forecast> automaticForecasts = new EnumMap<>(DrawType.class);
                 Map<DrawType, PredictionEngine.Forecast> personalForecasts = new EnumMap<>(DrawType.class);
+                // Solo el paquete con favoritos justifica un calculo personalizado por sorteo.
                 boolean createPersonalPackage = !favorites.isEmpty();
                 StringBuilder summary = new StringBuilder();
                 for (DrawType type : types) {
@@ -213,9 +228,18 @@ public final class MainActivity extends Activity {
                     automaticForecasts.put(type, automatic);
                     // Refresh AUTO when the user explicitly requests a side-by-side test.
                     databases.get(type).savePrediction(automatic, "AUTO", createPersonalPackage);
-                    if (createPersonalPackage) {
+                    String[] constraints = favorites.get(type);
+                    if (hasFavorites(constraints)) {
+                        String[] fixed = new String[type.slots];
+                        String[] discarded = new String[type.slots];
+                        for (int slot = 0; slot < type.slots; slot++) {
+                            String value = constraints[slot];
+                            if (value == null) continue;
+                            if (Character.isLowerCase(value.charAt(0))) discarded[slot] = value.toUpperCase(Locale.ROOT);
+                            else fixed[slot] = value;
+                        }
                         PredictionEngine.Forecast personal = new PredictionEngine(type).analyze(
-                                history, favorites.getOrDefault(type, new String[type.slots]));
+                                history, fixed, discarded);
                         personalForecasts.put(type, personal);
                         databases.get(type).savePrediction(personal, "PERSONAL", true);
                     }
@@ -372,31 +396,68 @@ public final class MainActivity extends Activity {
             showError("No se pudo leer el paquete guardado", error);
             return;
         }
+        int size = first.recommendations().size();
+        int[] order = displayOrder(size, automaticForecasts, savedByGroup);
         if (savedByGroup.containsKey("PERSONAL") || !personalForecasts.isEmpty()) {
-            addComparisonPages(personalForecasts, automaticForecasts, savedByGroup);
+            addComparisonPages(personalForecasts, automaticForecasts, savedByGroup, order);
         } else {
-            addPackagePages("Análisis automático", "AUTO", automaticForecasts, savedByGroup);
+            addPackagePages("Análisis automático", "AUTO", automaticForecasts, savedByGroup, order);
         }
         combinationsPager.setDisplayedChild(0);
         updatePageIndicator();
     }
 
-    private void addComparisonPages(
-            Map<DrawType, PredictionEngine.Forecast> personalForecasts,
+    /** Ordena los boletos de mayor a menor promedio esperado de aciertos. */
+    private int[] displayOrder(
+            int size,
             Map<DrawType, PredictionEngine.Forecast> automaticForecasts,
             Map<String, Map<DrawType, List<String>>> savedByGroup
     ) {
-        for (int index = 0; index < 20; index++) {
+        Integer[] indices = new Integer[size];
+        for (int index = 0; index < size; index++) indices[index] = index;
+        Arrays.sort(indices, Comparator.comparingDouble(
+                (Integer index) -> -averageExpectedHits(index, automaticForecasts, savedByGroup)));
+        int[] order = new int[size];
+        for (int index = 0; index < size; index++) order[index] = indices[index];
+        return order;
+    }
+
+    private double averageExpectedHits(
+            int index,
+            Map<DrawType, PredictionEngine.Forecast> forecasts,
+            Map<String, Map<DrawType, List<String>>> savedByGroup
+    ) {
+        double total = 0.0;
+        Map<DrawType, List<String>> saved = savedByGroup.get("AUTO");
+        for (DrawType type : activeTypes()) {
+            PredictionEngine.Forecast forecast = forecasts.get(type);
+            List<String> sequences = saved == null ? null : saved.get(type);
+            String sequence = sequences != null && index < sequences.size()
+                    ? sequences.get(index)
+                    : forecast.recommendations().get(index).sequence();
+            total += forecast.expectedHits(sequence);
+        }
+        return total;
+    }
+
+    private void addComparisonPages(
+            Map<DrawType, PredictionEngine.Forecast> personalForecasts,
+            Map<DrawType, PredictionEngine.Forecast> automaticForecasts,
+            Map<String, Map<DrawType, List<String>>> savedByGroup,
+            int[] order
+    ) {
+        for (int position = 0; position < order.length; position++) {
+            int index = order[position];
             LinearLayout page = new LinearLayout(this);
             page.setOrientation(LinearLayout.VERTICAL);
             addPackageSection(page, "Personalizado · favoritos", "PERSONAL", index,
-                    personalForecasts, savedByGroup);
+                    personalForecasts, automaticForecasts, savedByGroup);
             View separator = new View(this);
             separator.setBackgroundColor(getColor(R.color.divider));
             page.addView(separator, new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, dp(2)));
             addPackageSection(page, "Análisis automático", "AUTO", index,
-                    automaticForecasts, savedByGroup);
+                    automaticForecasts, automaticForecasts, savedByGroup);
             combinationsPager.addView(page);
         }
     }
@@ -405,13 +466,14 @@ public final class MainActivity extends Activity {
             String title,
             String packageType,
             Map<DrawType, PredictionEngine.Forecast> forecasts,
-            Map<String, Map<DrawType, List<String>>> savedByGroup
+            Map<String, Map<DrawType, List<String>>> savedByGroup,
+            int[] order
     ) {
-        Map<DrawType, List<String>> saved = savedByGroup.get(packageType);
-        for (int index = 0; index < 20; index++) {
+        for (int position = 0; position < order.length; position++) {
+            int index = order[position];
             LinearLayout page = new LinearLayout(this);
             page.setOrientation(LinearLayout.VERTICAL);
-            addPackageSection(page, title, packageType, index, forecasts, savedByGroup);
+            addPackageSection(page, title, packageType, index, forecasts, forecasts, savedByGroup);
             combinationsPager.addView(page);
         }
     }
@@ -419,6 +481,7 @@ public final class MainActivity extends Activity {
     private void addPackageSection(
             LinearLayout page, String title, String packageType, int index,
             Map<DrawType, PredictionEngine.Forecast> forecasts,
+            Map<DrawType, PredictionEngine.Forecast> fallback,
             Map<String, Map<DrawType, List<String>>> savedByGroup
     ) {
         TextView packageHeading = bodyText(title);
@@ -428,8 +491,12 @@ public final class MainActivity extends Activity {
         page.addView(packageHeading);
         Map<DrawType, List<String>> saved = savedByGroup.get(packageType);
         for (DrawType type : activeTypes()) {
-            String sequence = saved != null && saved.containsKey(type) ? saved.get(type).get(index)
+            List<String> sequences = saved == null ? null : saved.get(type);
+            String sequence = sequences != null && index < sequences.size()
+                    ? sequences.get(index)
                     : forecasts.get(type).recommendations().get(index).sequence();
+            PredictionEngine.Forecast forecast = forecasts.get(type);
+            if (forecast == null) forecast = fallback.get(type);
             int local = 0, draw = 0, away = 0;
             for (char state : sequence.toCharArray()) {
                 if (state == 'L') local++; else if (state == 'E') draw++; else away++;
@@ -440,6 +507,10 @@ public final class MainActivity extends Activity {
             heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             heading.setPadding(0, dp(12), 0, dp(8));
             page.addView(heading);
+            TextView expected = bodyText(getString(
+                    R.string.combination_expected, forecast.expectedHits(sequence)));
+            expected.setTextColor(getColor(R.color.muted));
+            page.addView(expected);
             page.addView(combinationPage(recommendation));
         }
     }

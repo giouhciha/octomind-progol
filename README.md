@@ -4,7 +4,7 @@ Aplicacion Android nativa y motor reproducible para estimar las probabilidades
 `L`, `E` y `V` del siguiente concurso de Mitad de Semana (9 partidos),
 Fin de Semana (14) y Revancha (7).
 
-## Version Android (0.4.0)
+## Version Android (0.4.10)
 
 - Descarga y valida el historico oficial de cada uno de los tres sorteos.
 - Selector entre Mitad de Semana y Fin de Semana + Revancha. En esta ultima
@@ -14,15 +14,22 @@ Fin de Semana (14) y Revancha (7).
 - Si los ultimos concursos de principal y Revancha no coinciden, se informa y
   no se presentan como un paquete conjunto de concursos diferentes.
 - Guarda concursos y pronosticos localmente en SQLite para trabajar sin conexion.
-- Entrega 20 combinaciones por sorteo. MS enumera 19,683 secuencias, Revancha
+- Entrega 10 combinaciones por sorteo. MS enumera 19,683 secuencias, Revancha
   2,187 y Principal 4,782,969. Para Principal se conserva una muestra
   reproducible de hasta 1,500 candidatos por composicion seleccionada;
   esta seleccion aproximada limita la memoria del dispositivo.
-- Al calcular con favoritos guarda dos grupos independientes de 20: uno
+- Al calcular con favoritos guarda dos grupos independientes de 10: uno
   automático y uno personalizado. Ambos se conservan en el respaldo y pueden
   compararse por separado en Seguimiento.
+- Permite, ademas de fijar resultados, prohibir resultados por casilla
+  (descartes ✕L/✕E/✕V). El paquete respeta tanto los fijos como los
+  descartes, recondicionando la composicion.
 - Presenta cada pronostico como una pagina visual de nueve partidos: la opcion
   L/E/V elegida se resalta en verde y se cambia deslizando horizontalmente.
+- Ordena las combinaciones por su promedio esperado de aciertos (de mayor a
+  menor), calculado con las probabilidades del modelo. Este orden es solo de
+  presentacion: no altera el paquete generado, su respaldo ni el orden que usa
+  el analisis de reduccion.
 - Mantiene las probabilidades base como parte interna del calculo, sin mostrar
   la tabla repetitiva de probabilidades por casilla en la interfaz.
 - Unifica controles, estados seleccionados, fondos y elementos del sistema con
@@ -32,7 +39,7 @@ Fin de Semana (14) y Revancha (7).
   como nueve locales.
 - Crea y restaura respaldos JSON mediante el selector de documentos de Android.
   Desde ahi puede elegirse Google Drive si esta configurado en el dispositivo.
-- Conserva los 20 pronosticos por concurso en una pantalla de seguimiento.
+- Conserva los 10 pronosticos por concurso en una pantalla de seguimiento.
 - Permite registrar resultados parciales por casilla, sin desplazar posiciones.
 - Ordena la comparacion de mayor a menor cantidad de aciertos.
 - Cuando el concurso aparece en el historico oficial, sustituye la captura manual
@@ -60,6 +67,13 @@ Las frecuencias por casilla no superaron de forma consistente esa referencia,
 por lo que no se fuerza una diferencia artificial entre posiciones. La capa de
 combinaciones conserva del sistema de referencia la idea util de restricciones,
 composicion y diversidad, pero no su interfaz ni sus parametros arbitrarios.
+
+Una prueba de significancia con bootstrap pareado (ver
+`scripts/run_model_significance.py`) confirma que ninguna variante del modelo
+(frecuencia por casilla, recencia, transicion o dependencia entre partidos)
+supera a la frecuencia global de forma concluyente en la prueba final: todos
+los intervalos de confianza al 95 % cruzan el cero. Por eso el motor conserva
+el modelo actual y no incorpora señales adicionales.
 
 El resultado es una estimacion experimental, no una garantia de premio.
 
@@ -90,6 +104,39 @@ El reporte se guarda en `outputs/package-backtest/report.md`. El valor
 actual del motor (`prior_20_div_20`) se conserva como referencia: no se
 reemplaza por una variante que no supere la prueba final.
 
+### Reducción del paquete de combinaciones
+
+Mide cuánto aporta cada boleto: genera el paquete ordenado y evalúa el mejor
+acierto medio cuando se juegan solo los primeros 1, 2, 3, 5, 8, 10, 15 o 20.
+Descarga los históricos de los tres sorteos a `app/build/qa-assets/` si no
+existen (el mismo directorio que usa `run_package_backtest.py`):
+
+```powershell
+python scripts/run_package_size_backtest.py
+```
+
+El reporte se guarda en `outputs/package-size/report.md`. Con el histórico
+actual las primeras 2 o 3 combinaciones capturan la mayor parte de la ganancia;
+después de unos 10 boletos cada uno aporta poco al acierto medio, aunque los
+boletos extra sí aumentan la probabilidad de acercarse al pleno (sobre todo en
+Revancha). Reducir a 5-10 boletos es razonable si se busca el acierto medio;
+mantener 20 se justifica para perseguir el pleno.
+
+### Prueba de significancia del modelo
+
+Comprueba si alguna variante del motor supera a la frecuencia global de forma
+estadísticamente concluyente. Evalúa cada modelo en orden cronológico, separa
+desarrollo y prueba final y aplica un bootstrap pareado por concurso:
+
+```powershell
+python scripts/run_model_significance.py
+```
+
+El reporte se guarda en `outputs/model-significance/report.md`. Con el histórico
+actual ninguna variante (frecuencia por casilla, recencia, transición o
+dependencia entre partidos) supera a la frecuencia global: todos los intervalos
+de confianza al 95 % cruzan el cero. Por eso el motor conserva el modelo actual.
+
 ## Ejecutar el experimento
 
 Se requiere Python 3.11 o posterior y acceso a Internet:
@@ -112,7 +159,7 @@ python scripts/run_media_semana_experiment.py --input ruta/al/archivo.csv
 ## Pruebas
 
 Las pruebas Android del motor incluyen aislamiento por sorteo, esquemas CSV,
-20 combinaciones únicas y reproducibles, composiciones extremas y aciertos
+10 combinaciones únicas y reproducibles, composiciones extremas y aciertos
 parciales para 7 y 14 posiciones:
 
 ```powershell

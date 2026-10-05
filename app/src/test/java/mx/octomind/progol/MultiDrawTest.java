@@ -23,9 +23,9 @@ public class MultiDrawTest {
             PredictionEngine.Forecast second = engine.analyze(history(type, false));
             assertEquals(111, first.targetContest());
             assertEquals(type.modelVersion(), first.modelVersion());
-            assertEquals(20, first.recommendations().size());
+            assertEquals(PredictionEngine.PACKAGE_SIZE, first.recommendations().size());
             Set<String> unique = new HashSet<>();
-            for (int i = 0; i < 20; i++) {
+            for (int i = 0; i < PredictionEngine.PACKAGE_SIZE; i++) {
                 String sequence = first.recommendations().get(i).sequence();
                 assertEquals(type.slots, sequence.length());
                 assertTrue(unique.add(sequence));
@@ -38,7 +38,7 @@ public class MultiDrawTest {
         new PredictionEngine(DrawType.WEEKEND).analyze(history(DrawType.REVANCHA, false));
     }
     @Test public void extremeCompositionsCannotExhaustCandidateBucket() {
-        assertEquals(20, new PredictionEngine(DrawType.REVANCHA)
+        assertEquals(PredictionEngine.PACKAGE_SIZE, new PredictionEngine(DrawType.REVANCHA)
                 .analyze(history(DrawType.REVANCHA, true)).recommendations().size());
     }
     @Test public void parsersAcceptTheirOwnSchemasAndRejectOthers() throws Exception {
@@ -76,11 +76,36 @@ public class MultiDrawTest {
             favorites[0] = "L";
             if (type != DrawType.REVANCHA) favorites[type.slots - 1] = "V";
             PredictionEngine.Forecast forecast = new PredictionEngine(type).analyze(history(type, false), favorites);
-            assertEquals(20, forecast.recommendations().size());
+            assertEquals(PredictionEngine.PACKAGE_SIZE, forecast.recommendations().size());
             for (PredictionEngine.Recommendation ticket : forecast.recommendations()) {
                 assertEquals('L', ticket.sequence().charAt(0));
                 if (type != DrawType.REVANCHA) assertEquals('V', ticket.sequence().charAt(type.slots - 1));
             }
         }
+    }
+
+    @Test public void discardedStatesNeverAppearWhileFixedStay() {
+        for (DrawType type : DrawType.values()) {
+            String[] fixed = new String[type.slots];
+            String[] discarded = new String[type.slots];
+            fixed[0] = "L";
+            discarded[1] = "V";
+            if (type != DrawType.REVANCHA) discarded[type.slots - 1] = "L";
+            PredictionEngine.Forecast forecast = new PredictionEngine(type).analyze(
+                    history(type, false), fixed, discarded);
+            assertEquals(PredictionEngine.PACKAGE_SIZE, forecast.recommendations().size());
+            for (PredictionEngine.Recommendation ticket : forecast.recommendations()) {
+                assertEquals('L', ticket.sequence().charAt(0));
+                assertNotEquals('V', ticket.sequence().charAt(1));
+                if (type != DrawType.REVANCHA) assertNotEquals('L', ticket.sequence().charAt(type.slots - 1));
+            }
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void fixedAndDiscardedConflictIsRejected() {
+        String[] fixed = {"L", null, null, null, null, null, null, null, null};
+        String[] discarded = {"L", null, null, null, null, null, null, null, null};
+        new PredictionEngine(DrawType.MS).analyze(history(DrawType.MS, false), fixed, discarded);
     }
 }

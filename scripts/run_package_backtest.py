@@ -144,6 +144,11 @@ def package(history: list[Contest], slots: int, settings: Settings, quantity: in
         quotas[key] += 1
     chosen: list[str] = []
     pools = {comp: list(candidate_records(comp)) for comp, quota in quotas.items() if quota}
+    # For large packages a rare composition may receive more tickets than it has
+    # permutations. Cap it so the greedy step never runs out of candidates.
+    for comp in pools:
+        if quotas[comp] > len(pools[comp]):
+            quotas[comp] = len(pools[comp])
     for comp in sorted(comp_probability, key=lambda key: (-comp_probability[key], key)):
         for _ in range(quotas[comp]):
             candidates = pools[comp]

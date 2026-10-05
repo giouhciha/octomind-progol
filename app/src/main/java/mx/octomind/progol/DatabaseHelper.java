@@ -476,7 +476,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 values.put("model_version", item.getString("modelVersion"));
                 JSONObject payload = item.getJSONObject("payload");
                 JSONArray picks = payload.getJSONArray("recommendations");
-                if (picks.length() != 20) throw new JSONException("Se requieren 20 pronósticos");
+                if (picks.length() < 1) throw new JSONException("Se requieren pronósticos");
                 for (int pick = 0; pick < picks.length(); pick++) {
                     String sequence = picks.getJSONObject(pick).getString("sequence");
                     if (!sequence.matches("[LEV]{" + type.slots + "}")) throw new JSONException("Pronóstico inválido");

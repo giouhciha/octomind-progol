@@ -229,7 +229,7 @@ public final class TrackingActivity extends Activity {
         String label = "PERSONAL".equals(packageType) ? "personalizado" : "automático";
         new AlertDialog.Builder(this)
                 .setTitle("Eliminar análisis " + label)
-                .setMessage("Se eliminarán sus 20 pronósticos. Los resultados y equipos capturados se conservarán.")
+                .setMessage("Se eliminarán sus pronósticos. Los resultados y equipos capturados se conservarán.")
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton("Eliminar", (dialog, which) -> {
                     database.deletePredictionPackage(activeContest, packageType);
@@ -247,8 +247,9 @@ public final class TrackingActivity extends Activity {
         }
         packages.sort(Comparator.comparing(DatabaseHelper.PredictionSnapshot::packageType).reversed());
         for (DatabaseHelper.PredictionSnapshot packageSnapshot : packages) {
-            TextView heading = bodyText("PERSONAL".equals(packageSnapshot.packageType())
-                    ? "Personalizado · 20 pronósticos" : "Automático · 20 pronósticos");
+            TextView heading = bodyText(("PERSONAL".equals(packageSnapshot.packageType())
+                    ? "Personalizado · " : "Automático · ")
+                    + packageSnapshot.sequences().size() + " pronósticos");
             heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             heading.setTextColor(getColor(R.color.primary_dark));
             heading.setPadding(0, dp(12), 0, dp(2));

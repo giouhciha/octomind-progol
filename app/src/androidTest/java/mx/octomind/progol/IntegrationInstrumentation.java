@@ -51,7 +51,7 @@ public final class IntegrationInstrumentation extends Instrumentation {
                     }
                     db.savePrediction(forecast);
                     require(db.getPredictionSnapshots().size() == 1, "duplicate package");
-                    require(db.getPredictionSnapshots().get(0).sequences().size() == 20, "package size");
+                    require(db.getPredictionSnapshots().get(0).sequences().size() == PredictionEngine.PACKAGE_SIZE, "package size");
                     db.saveTrackedResult(latest + 1, 0, "E");
                     db.saveTrackedResult(latest + 1, type.slots - 1, "V");
                     require(db.getTrackedResults(latest + 1).completedCount() == 2, "partial save");

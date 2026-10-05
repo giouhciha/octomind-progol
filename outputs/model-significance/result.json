@@ -1,0 +1,53 @@
+{
+  "source": "https://www.loterianacional.gob.mx/Documentos/Historicos/Progol-Media-S.csv",
+  "contests": 814,
+  "burn_in": 100,
+  "holdout_contests": 215,
+  "models": [
+    {
+      "model": "global_frequency",
+      "holdout_log_loss": 9.69296242921844,
+      "difference": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.0,
+      "p_value": 1.0
+    },
+    {
+      "model": "position_frequency",
+      "holdout_log_loss": 9.679587817459682,
+      "difference": -0.013374611758758093,
+      "ci_low": -0.03609522577095919,
+      "ci_high": 0.01027461807313245,
+      "p_value": 0.2733333333333333
+    },
+    {
+      "model": "transition",
+      "holdout_log_loss": 9.6898041950149,
+      "difference": -0.003158234203539223,
+      "ci_low": -0.03895862552795201,
+      "ci_high": 0.03277417866890792,
+      "p_value": 0.8973333333333333
+    },
+    {
+      "model": "recent_hl_104",
+      "holdout_log_loss": 9.692871632169568,
+      "difference": -9.079704887149376e-05,
+      "ci_low": -0.03833630432677045,
+      "ci_high": 0.03819975073268974,
+      "p_value": 0.9906666666666667
+    },
+    {
+      "model": "blend_hl_104",
+      "holdout_log_loss": 9.685188831717356,
+      "difference": -0.007773597501083529,
+      "ci_low": -0.041166452578284024,
+      "ci_high": 0.026798601997385922,
+      "p_value": 0.6526666666666666
+    }
+  ],
+  "joint_holdout_log_loss": 9.731689083308526,
+  "joint_difference": 0.03872665409008569,
+  "joint_ci_low": -0.007475947406807566,
+  "joint_ci_high": 0.08917040190374512,
+  "joint_p_value": 0.12066666666666667
+}

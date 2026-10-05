@@ -18,7 +18,7 @@ public final class PredictionEngineTest {
         PredictionEngine.Forecast forecast = new PredictionEngine().analyze(history(150));
 
         assertEquals(151, forecast.targetContest());
-        assertEquals(20, forecast.recommendations().size());
+        assertEquals(PredictionEngine.PACKAGE_SIZE, forecast.recommendations().size());
         for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
             double total = forecast.probability(slot, 0)
                     + forecast.probability(slot, 1)
@@ -40,6 +40,25 @@ public final class PredictionEngineTest {
     @Test(expected = IllegalArgumentException.class)
     public void forecastRejectsInsufficientHistory() {
         new PredictionEngine().analyze(history(99));
+    }
+
+    @Test
+    public void expectedHitsSumsTheModelProbabilities() {
+        PredictionEngine.Forecast forecast = new PredictionEngine().analyze(history(150));
+        String sequence = forecast.recommendations().get(0).sequence();
+        double expected = 0;
+        for (int slot = 0; slot < Contest.SLOT_COUNT; slot++) {
+            int state = sequence.charAt(slot) == 'L' ? 0
+                    : sequence.charAt(slot) == 'E' ? 1 : 2;
+            expected += forecast.probability(slot, state);
+        }
+        assertEquals(expected, forecast.expectedHits(sequence), 1e-12);
+        assertTrue(expected > 0 && expected <= Contest.SLOT_COUNT);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void expectedHitsRejectsIncompleteSequence() {
+        new PredictionEngine().analyze(history(150)).expectedHits("LEV");
     }
 
     private static List<Contest> history(int count) {

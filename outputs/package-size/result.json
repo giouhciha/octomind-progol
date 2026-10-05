@@ -1,0 +1,180 @@
+{
+  "step": 5,
+  "sizes": [
+    1,
+    2,
+    3,
+    5,
+    8,
+    10,
+    15,
+    20
+  ],
+  "draws": [
+    {
+      "draw": "MS",
+      "slots": 9,
+      "history": 814,
+      "rows": [
+        {
+          "size": 1,
+          "development": 3.18,
+          "holdout": 3.2093,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 2,
+          "development": 4.1,
+          "holdout": 4.0465,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 3,
+          "development": 4.51,
+          "holdout": 4.6279,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 5,
+          "development": 4.81,
+          "holdout": 4.907,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 8,
+          "development": 5.24,
+          "holdout": 5.093,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 10,
+          "development": 5.44,
+          "holdout": 5.3256,
+          "holdout_near": 0.0233
+        },
+        {
+          "size": 15,
+          "development": 5.77,
+          "holdout": 5.6977,
+          "holdout_near": 0.0465
+        },
+        {
+          "size": 20,
+          "development": 5.96,
+          "holdout": 5.8605,
+          "holdout_near": 0.0465
+        }
+      ]
+    },
+    {
+      "draw": "WEEKEND",
+      "slots": 14,
+      "history": 1577,
+      "rows": [
+        {
+          "size": 1,
+          "development": 4.7488,
+          "holdout": 4.7079,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 2,
+          "development": 5.9758,
+          "holdout": 6.0562,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 3,
+          "development": 6.57,
+          "holdout": 6.5618,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 5,
+          "development": 7.0918,
+          "holdout": 7.0674,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 8,
+          "development": 7.5845,
+          "holdout": 7.6854,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 10,
+          "development": 7.7874,
+          "holdout": 7.7079,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 15,
+          "development": 8.0821,
+          "holdout": 7.9438,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 20,
+          "development": 8.3188,
+          "holdout": 8.1685,
+          "holdout_near": 0.0
+        }
+      ]
+    },
+    {
+      "draw": "REVANCHA",
+      "slots": 7,
+      "history": 931,
+      "rows": [
+        {
+          "size": 1,
+          "development": 2.4701,
+          "holdout": 2.58,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 2,
+          "development": 3.4444,
+          "holdout": 3.46,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 3,
+          "development": 3.7949,
+          "holdout": 3.78,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 5,
+          "development": 4.2222,
+          "holdout": 4.0,
+          "holdout_near": 0.0
+        },
+        {
+          "size": 8,
+          "development": 4.5214,
+          "holdout": 4.34,
+          "holdout_near": 0.02
+        },
+        {
+          "size": 10,
+          "development": 4.6667,
+          "holdout": 4.38,
+          "holdout_near": 0.02
+        },
+        {
+          "size": 15,
+          "development": 4.812,
+          "holdout": 4.64,
+          "holdout_near": 0.08
+        },
+        {
+          "size": 20,
+          "development": 4.9915,
+          "holdout": 4.86,
+          "holdout_near": 0.1
+        }
+      ]
+    }
+  ]
+}

@@ -1,11 +1,83 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Icono kawaii: un pulpo (Octomind) con la paleta verde de la app.
+     Vector puro, escala a cualquier tamano sin perder nitidez. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
+
+    <!-- Fondo verde con un halo mas claro detras del pulpo -->
     <path android:fillColor="@color/primary" android:pathData="M0,0h48v48h-48z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M12,11h7v7h-7zM21,11h7v7h-7zM30,11h7v7h-7zM12,20h7v7h-7zM21,20h7v7h-7zM30,20h7v7h-7zM12,29h7v7h-7zM21,29h7v7h-7zM30,29h7v7h-7z" />
+        android:fillColor="#1FB877"
+        android:pathData="M5,24 a19,19 0 1 0 38,0 a19,19 0 1 0 -38,0 z" />
+
+    <group android:translateY="1.5">
+        <!-- Tentaculos (se dibujan primero para que la cabeza los cubra) -->
+        <path
+            android:fillColor="#F4FFFA"
+            android:strokeColor="@color/primary_dark"
+            android:strokeWidth="1.1"
+            android:pathData="M9.5,30 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z" />
+        <path
+            android:fillColor="#F4FFFA"
+            android:strokeColor="@color/primary_dark"
+            android:strokeWidth="1.1"
+            android:pathData="M16.5,30 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z" />
+        <path
+            android:fillColor="#F4FFFA"
+            android:strokeColor="@color/primary_dark"
+            android:strokeWidth="1.1"
+            android:pathData="M23.5,30 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z" />
+        <path
+            android:fillColor="#F4FFFA"
+            android:strokeColor="@color/primary_dark"
+            android:strokeWidth="1.1"
+            android:pathData="M30.5,30 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z" />
+
+        <!-- Cabeza -->
+        <path
+            android:fillColor="#F4FFFA"
+            android:strokeColor="@color/primary_dark"
+            android:strokeWidth="1.1"
+            android:pathData="M11,19 a13,11 0 1 0 26,0 a13,11 0 1 0 -26,0 z" />
+
+        <!-- Brillo superior de la cabeza -->
+        <path
+            android:fillColor="#8CFFFFFF"
+            android:pathData="M14.8,13 a3.2,1.8 0 1 0 6.4,0 a3.2,1.8 0 1 0 -6.4,0 z" />
+
+        <!-- Mejillas sonrojadas -->
+        <path
+            android:fillColor="#E6FF9DB0"
+            android:pathData="M12.3,21.5 a2.2,1.4 0 1 0 4.4,0 a2.2,1.4 0 1 0 -4.4,0 z" />
+        <path
+            android:fillColor="#E6FF9DB0"
+            android:pathData="M31.3,21.5 a2.2,1.4 0 1 0 4.4,0 a2.2,1.4 0 1 0 -4.4,0 z" />
+
+        <!-- Ojos -->
+        <path
+            android:fillColor="@color/ink"
+            android:pathData="M16.7,18 a2.3,3 0 1 0 4.6,0 a2.3,3 0 1 0 -4.6,0 z" />
+        <path
+            android:fillColor="@color/ink"
+            android:pathData="M26.7,18 a2.3,3 0 1 0 4.6,0 a2.3,3 0 1 0 -4.6,0 z" />
+
+        <!-- Destellos en los ojos -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M17.2,16.6 a0.9,0.9 0 1 0 1.8,0 a0.9,0.9 0 1 0 -1.8,0 z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M27.2,16.6 a0.9,0.9 0 1 0 1.8,0 a0.9,0.9 0 1 0 -1.8,0 z" />
+
+        <!-- Boquita sonriente -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="@color/ink"
+            android:strokeWidth="1.0"
+            android:strokeLineCap="round"
+            android:pathData="M22,22.6 q2,2.4 4,0" />
+    </group>
 </vector>
