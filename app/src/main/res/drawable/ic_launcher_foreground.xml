@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- Tentáculos (blancos, salen por abajo) -->
+    <path android:fillColor="#FFFFFF" android:pathData="M196,356 Q184,424 170,466 Q204,466 220,418 Q228,386 232,360 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M240,370 Q236,440 230,476 Q264,476 266,430 Q268,394 266,370 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M272,370 Q280,444 290,476 Q324,470 312,418 Q304,388 300,360 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M316,356 Q328,422 342,466 Q376,462 358,410 Q348,384 344,356 Z" />
+
+    <!-- Balón -->
+    <path android:fillColor="#FFFFFF" android:pathData="M106,238 a150,150 0 1,0 300,0 a150,150 0 1,0 -300,0 Z" />
+
+    <!-- Pentágonos (negros) -->
+    <path android:fillColor="#1A1A1A" android:pathData="M256,285 L287,305 L275,345 L237,345 L225,305 Z" />
+    <path android:fillColor="#1A1A1A" android:pathData="M180,160 L198,174 L193,200 L167,196 Z" />
+    <path android:fillColor="#1A1A1A" android:pathData="M332,160 L314,174 L319,200 L345,196 Z" />
+    <path android:fillColor="#1A1A1A" android:pathData="M185,300 L200,308 L195,330 L172,324 Z" />
+    <path android:fillColor="#1A1A1A" android:pathData="M327,300 L312,308 L317,330 L340,324 Z" />
+
+    <!-- Ojos kawai -->
+    <path android:fillColor="#1A1A1A" android:pathData="M184,196 a24,24 0 1,0 48,0 a24,24 0 1,0 -48,0 Z" />
+    <path android:fillColor="#1A1A1A" android:pathData="M280,196 a24,24 0 1,0 48,0 a24,24 0 1,0 -48,0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M207,188 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M303,188 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M196,202 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M292,202 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 Z" />
+
+    <!-- Mejillas -->
+    <path android:fillColor="#FFB3C1" android:fillAlpha="0.85" android:pathData="M154,242 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0 Z" />
+    <path android:fillColor="#FFB3C1" android:fillAlpha="0.85" android:pathData="M326,242 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0 Z" />
+
+    <!-- Sonrisa -->
+    <path
+        android:strokeColor="#1A1A1A"
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M228,254 Q256,276 284,254" />
+</vector>

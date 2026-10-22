@@ -5,3 +5,6 @@ local.properties
 **/build/
 outputs/*.png
 outputs/*.xml
+.idea/
+*.iml
+.DS_Store

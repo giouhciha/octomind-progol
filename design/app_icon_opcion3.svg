@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <clipPath id="ballClip">
+      <circle cx="256" cy="238" r="150"/>
+    </clipPath>
+  </defs>
+
+  <!-- Fondo morado oscuro -->
+  <rect width="512" height="512" rx="100" fill="#2E1065"/>
+
+  <!-- Tentáculos (detrás del balón, salen por abajo) -->
+  <g fill="#FFFFFF">
+    <path d="M196 356 Q184 424 170 466 Q204 466 220 418 Q228 386 232 360 Z"/>
+    <path d="M240 370 Q236 440 230 476 Q264 476 266 430 Q268 394 266 370 Z"/>
+    <path d="M272 370 Q280 444 290 476 Q324 470 312 418 Q304 388 300 360 Z"/>
+    <path d="M316 356 Q328 422 342 466 Q376 462 358 410 Q348 384 344 356 Z"/>
+  </g>
+
+  <!-- Balón -->
+  <circle cx="256" cy="238" r="150" fill="#FFFFFF"/>
+
+  <!-- Patrón de pentágonos (recortado al balón) -->
+  <g clip-path="url(#ballClip)" fill="#1A1A1A">
+    <path d="M256 296 L292 310 L278 342 L234 342 L220 310 Z"/>
+    <path d="M146 172 L178 184 L173 210 L138 204 Z"/>
+    <path d="M366 172 L334 184 L339 210 L374 204 Z"/>
+    <path d="M148 296 L178 304 L171 328 L138 318 Z"/>
+    <path d="M364 296 L334 304 L341 328 L374 318 Z"/>
+  </g>
+
+  <!-- Ojos kawai -->
+  <circle cx="208" cy="196" r="24" fill="#1A1A1A"/>
+  <circle cx="304" cy="196" r="24" fill="#1A1A1A"/>
+  <circle cx="216" cy="188" r="9" fill="#FFFFFF"/>
+  <circle cx="312" cy="188" r="9" fill="#FFFFFF"/>
+  <circle cx="200" cy="202" r="4" fill="#FFFFFF"/>
+  <circle cx="296" cy="202" r="4" fill="#FFFFFF"/>
+
+  <!-- Mejillas -->
+  <circle cx="170" cy="242" r="16" fill="#FFB3C1" opacity="0.85"/>
+  <circle cx="342" cy="242" r="16" fill="#FFB3C1" opacity="0.85"/>
+
+  <!-- Sonrisa -->
+  <path d="M228 254 Q256 276 284 254" stroke="#1A1A1A" stroke-width="9" fill="none" stroke-linecap="round"/>
+</svg>

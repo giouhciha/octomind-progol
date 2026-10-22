@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Octomind Backoffice</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">Octomind <b>Backoffice</b></span>
+    <button id="logoutBtn" class="btn ghost">Cerrar sesión</button>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Concurso</h2>
+      <div class="row">
+        <label>Sorteo
+          <select id="drawType">
+            <option value="WEEKEND">Fin de Semana (14)</option>
+            <option value="REVANCHA">Revancha (7)</option>
+            <option value="MS">Media Semana (9)</option>
+          </select>
+        </label>
+        <label>Número de concurso
+          <input id="contestNumber" type="number" placeholder="2355">
+        </label>
+        <label>Fin
+          <input id="endDate" type="datetime-local">
+        </label>
+      </div>
+      <div id="slots"></div>
+      <div class="row actions">
+        <button id="saveBtn" class="btn primary">Guardar borrador</button>
+        <button id="publishBtn" class="btn danger">Publicar</button>
+      </div>
+      <div id="msg" class="msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>Concursos registrados</h2>
+      <div class="row">
+        <label>Sorteo
+          <select id="filterDrawType">
+            <option value="">Todos</option>
+            <option value="WEEKEND">Fin de Semana</option>
+            <option value="REVANCHA">Revancha</option>
+            <option value="MS">Media Semana</option>
+          </select>
+        </label>
+        <label>Estado
+          <select id="filterStatus">
+            <option value="">Todos</option>
+            <option value="DRAFT">Borrador</option>
+            <option value="PUBLISHED">Publicado</option>
+            <option value="ACTIVE">Activo (vigente)</option>
+          </select>
+        </label>
+      </div>
+      <table id="contestsTable">
+        <thead><tr><th>Sorteo</th><th>#</th><th>Fin</th><th>Estado</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Ranking</h2>
+      <table id="leaderboardTable">
+        <thead><tr><th>Email</th><th>Aciertos totales</th><th>Concursos</th><th>Promedio</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Usuarios registrados</h2>
+      <table id="usersTable">
+        <thead><tr><th>Email</th><th>Estado</th><th>Rol</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Histórico (Lotería Nacional)</h2>
+      <div class="row">
+        <label>Sorteo
+          <select id="historyDrawType">
+            <option value="WEEKEND">Fin de Semana</option>
+            <option value="REVANCHA">Revancha</option>
+            <option value="MS">Media Semana</option>
+          </select>
+        </label>
+        <button id="refreshHistoryBtn" class="btn primary match-input">Sincronizar histórico</button>
+      </div>
+      <table id="historyTable">
+        <thead><tr><th>#</th><th>Fecha</th><th>Resultados</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <div id="templatesModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeTemplatesModal()">&times;</span>
+      <h2 id="templatesTitle"></h2>
+      <div id="templatesBody"></div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

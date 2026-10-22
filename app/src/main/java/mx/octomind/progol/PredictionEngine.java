@@ -24,11 +24,20 @@ public final class PredictionEngine {
     public PredictionEngine(DrawType type) { this.type = type; }
 
     public Forecast analyze(List<Contest> history) {
-        return analyze(history, new String[type.slots]);
+        return analyze(history, new String[type.slots], 0, DEFAULT_PACKAGE_SIZE);
     }
 
     /** Fixed picks are intentionally excluded from the likelihood score. */
     public Forecast analyze(List<Contest> history, String[] fixedStates) {
+        return analyze(history, fixedStates, 0, DEFAULT_PACKAGE_SIZE);
+    }
+
+    /** targetOverride: número de concurso objetivo (0 = último histórico + 1). */
+    public Forecast analyze(List<Contest> history, String[] fixedStates, int targetOverride) {
+        return analyze(history, fixedStates, targetOverride, DEFAULT_PACKAGE_SIZE);
+    }
+
+    public Forecast analyze(List<Contest> history, String[] fixedStates, int targetOverride, int packageSize) {
         if (history == null || history.size() < 100) {
             throw new IllegalArgumentException("Se requieren al menos 100 concursos");
         }
@@ -38,6 +47,7 @@ public final class PredictionEngine {
         }
         validateFixedStates(fixedStates);
         int sourceContest = history.stream().mapToInt(Contest::number).max().orElseThrow();
+        int targetContest = targetOverride > 0 ? targetOverride : sourceContest + 1;
         double[] global = globalProbabilities(history);
         double[][] slotProbabilities = new double[type.slots][STATES.length];
         for (int slot = 0; slot < type.slots; slot++) {
@@ -48,15 +58,16 @@ public final class PredictionEngine {
         List<Recommendation> recommendations = recommend(
                 slotProbabilities,
                 compositionProbabilities,
-                DEFAULT_PACKAGE_SIZE,
+                packageSize,
                 fixedStates
         );
         return new Forecast(
                 sourceContest,
-                sourceContest + 1,
+                targetContest,
                 history.size(),
                 slotProbabilities,
-                recommendations
+                recommendations,
+                fixedStates
         );
     }
 
@@ -489,19 +500,24 @@ public final class PredictionEngine {
         private final int historicalContests;
         private final double[][] probabilities;
         private final List<Recommendation> recommendations;
+        private final String[] fixedStates;
 
         Forecast(
                 int sourceContest,
                 int targetContest,
                 int historicalContests,
                 double[][] probabilities,
-                List<Recommendation> recommendations
+                List<Recommendation> recommendations,
+                String[] fixedStates
         ) {
             this.sourceContest = sourceContest;
             this.targetContest = targetContest;
             this.historicalContests = historicalContests;
             this.probabilities = probabilities;
             this.recommendations = List.copyOf(recommendations);
+            this.fixedStates = fixedStates == null
+                    ? new String[probabilities.length]
+                    : fixedStates.clone();
         }
 
         public String modelVersion() { return probabilities.length == 14 ? DrawType.WEEKEND.modelVersion() : probabilities.length == 7 ? DrawType.REVANCHA.modelVersion() : MODEL_VERSION; }
@@ -510,6 +526,7 @@ public final class PredictionEngine {
         public int historicalContests() { return historicalContests; }
         public double probability(int slot, int state) { return probabilities[slot][state]; }
         public List<Recommendation> recommendations() { return recommendations; }
+        public String[] fixedStates() { return fixedStates.clone(); }
 
         public JSONObject toJson() {
             try {
@@ -527,6 +544,11 @@ public final class PredictionEngine {
                     probabilityRows.put(item);
                 }
                 root.put("probabilities", probabilityRows);
+                JSONArray fixedRows = new JSONArray();
+                for (String state : fixedStates) {
+                    fixedRows.put(state == null ? JSONObject.NULL : state);
+                }
+                root.put("fixedStates", fixedRows);
                 JSONArray combinationRows = new JSONArray();
                 for (Recommendation recommendation : recommendations) {
                     JSONObject item = new JSONObject();

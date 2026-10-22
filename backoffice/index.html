@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Octomind — Backoffice</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="card login-card">
+    <h1>Octomind Backoffice</h1>
+    <p>Administración de datos, partidos y publicación.</p>
+    <button id="loginBtn" class="btn primary">Iniciar sesión</button>
+  </div>
+  <script src="config.js"></script>
+  <script>
+    document.getElementById('loginBtn').addEventListener('click', () => {
+      const url = `${CONFIG.cognitoDomain}/login?client_id=${CONFIG.clientId}`
+        + `&response_type=code&scope=email+openid+profile+aws.cognito.signin.user.admin`
+        + `&redirect_uri=${encodeURIComponent(CONFIG.redirectUri)}`;
+      window.location.href = url;
+    });
+  </script>
+</body>
+</html>

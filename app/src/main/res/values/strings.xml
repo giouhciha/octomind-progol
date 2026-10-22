@@ -9,6 +9,7 @@
     <string name="create_backup">Crear respaldo</string>
     <string name="restore_backup">Restaurar respaldo</string>
     <string name="open_tracking">Seguimiento de resultados</string>
+    <string name="logout">Cerrar sesión</string>
     <string name="tracking_title">Seguimiento de pronósticos</string>
     <string name="tracking_subtitle">Captura los resultados conforme terminan los partidos. Puedes dejar casillas pendientes.</string>
     <string name="tracking_contest">Concurso</string>
@@ -22,6 +23,8 @@
     <string name="tracking_partial_status">%1$d de %2$d resultados capturados · Guardado automáticamente</string>
     <string name="probability_title">Probabilidades por casilla</string>
     <string name="combinations_title">Paquete de combinaciones</string>
+    <string name="refresh_matches">Refrescar partidos</string>
+    <string name="package_size_label">Pronósticos</string>
     <string name="previous_prediction">Anterior</string>
     <string name="next_prediction">Siguiente</string>
     <string name="swipe_hint">Desliza a la izquierda o derecha para cambiar</string>

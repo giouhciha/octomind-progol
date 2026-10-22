@@ -46,24 +46,37 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/package_size_label"
+                android:textColor="@color/ink"
+                android:textSize="14sp" />
+
+            <Spinner
+                android:id="@+id/packageSizeSpinner"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:contentDescription="@string/package_size_label" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:orientation="horizontal"
             style="?android:attr/buttonBarStyle">
-
-            <Button
-                style="?android:attr/buttonBarButtonStyle"
-                android:id="@+id/updateButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/update_history"
-                android:textAllCaps="false" />
 
             <Button
                 style="?android:attr/buttonBarButtonStyle"
                 android:id="@+id/predictButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:text="@string/run_prediction"
                 android:textAllCaps="false" />
@@ -135,13 +148,32 @@
             android:background="@drawable/card_background"
             android:orientation="vertical">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/combinations_title"
-                android:textColor="@color/ink"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/combinations_title"
+                    android:textColor="@color/ink"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/refreshMatchesButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:contentDescription="@string/refresh_matches"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:text="⟳"
+                    android:textAllCaps="false"
+                    android:textSize="20sp" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/combinationMeta"
@@ -210,6 +242,15 @@
             android:text="@string/method_note"
             android:textColor="@color/muted"
             android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/logoutButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:text="@string/logout"
+            android:textAllCaps="false"
+            android:textColor="@color/result_error" />
 
     </LinearLayout>
 </ScrollView>

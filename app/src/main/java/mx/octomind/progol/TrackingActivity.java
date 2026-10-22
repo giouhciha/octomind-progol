@@ -8,9 +8,6 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.InputFilter;
 import android.text.InputType;
-import android.text.SpannableString;
-import android.text.Spanned;
-import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.AdapterView;
@@ -21,51 +18,71 @@ import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.ScrollView;
 
 import org.json.JSONException;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public final class TrackingActivity extends Activity {
-    private DatabaseHelper database;
-    private DrawType type;
+    private final Map<DrawType, DatabaseHelper> databases = new EnumMap<>(DrawType.class);
+    private final Map<DrawType, List<DatabaseHelper.PredictionSnapshot>> snapshotsByType = new EnumMap<>(DrawType.class);
+    private final Map<DrawType, List<EditText>> localInputs = new EnumMap<>(DrawType.class);
+    private final Map<DrawType, List<EditText>> visitorInputs = new EnumMap<>(DrawType.class);
+    private final Map<DrawType, List<TextView>> resultLabels = new EnumMap<>(DrawType.class);
+    private List<DrawType> types = new ArrayList<>();
     private Spinner contestSpinner;
     private TextView statusText;
     private LinearLayout resultInputs;
     private LinearLayout comparisonList;
     private Button deletePersonalButton;
     private Button deleteAutomaticButton;
-    private List<DatabaseHelper.PredictionSnapshot> snapshots = List.of();
-    private List<DatabaseHelper.PredictionSnapshot> allSnapshots = List.of();
-    private final List<EditText> localInputs = new ArrayList<>();
-    private final List<EditText> visitorInputs = new ArrayList<>();
-    private final List<TextView> resultLabels = new ArrayList<>();
     private int activeContest;
     private boolean rendering;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private int publishedContestNumber = 0;
+    private List<Integer> contestNumbers = List.of();
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_tracking);
+        for (DrawType type : DrawType.values()) {
+            databases.put(type, new DatabaseHelper(this, type));
+            snapshotsByType.put(type, List.of());
+            localInputs.put(type, new ArrayList<>());
+            visitorInputs.put(type, new ArrayList<>());
+            resultLabels.put(type, new ArrayList<>());
+        }
         String draw = getIntent().getStringExtra("drawType");
-        type = DrawType.valueOf(draw == null ? "MS" : draw);
-        database = new DatabaseHelper(this, type);
+        DrawType primary = draw == null ? DrawType.MS : DrawType.valueOf(draw);
+        types = primary == DrawType.MS
+                ? new ArrayList<>(List.of(DrawType.MS))
+                : new ArrayList<>(List.of(DrawType.WEEKEND, DrawType.REVANCHA));
+
         Spinner drawSelector = findViewById(R.id.trackingDrawSelector);
         drawSelector.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
-                new String[]{"Mitad de Semana", "Fin de Semana", "Revancha"}));
-        drawSelector.setSelection(type.ordinal());
+                new String[]{"Mitad de Semana", "Fin de Semana + Revancha"}));
+        drawSelector.setSelection(primary == DrawType.MS ? 0 : 1);
         drawSelector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onNothingSelected(AdapterView<?> parent) { }
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (type == DrawType.values()[position]) return;
-                database.close(); type = DrawType.values()[position];
-                database = new DatabaseHelper(TrackingActivity.this, type);
-                buildMatchRows(); loadSnapshots();
+                List<DrawType> next = position == 0
+                        ? List.of(DrawType.MS)
+                        : List.of(DrawType.WEEKEND, DrawType.REVANCHA);
+                if (types.equals(next)) return;
+                types = new ArrayList<>(next);
+                buildMatchRows();
+                fetchPublishedContest();
             }
         });
+
         contestSpinner = findViewById(R.id.contestSpinner);
         statusText = findViewById(R.id.trackingStatus);
         resultInputs = findViewById(R.id.resultInputs);
@@ -77,29 +94,84 @@ public final class TrackingActivity extends Activity {
         buildMatchRows();
         contestSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (position >= 0 && position < snapshots.size()) renderContest(snapshots.get(position));
+                if (position >= 0 && position < contestNumbers.size()) renderContest(contestNumbers.get(position));
             }
             public void onNothingSelected(AdapterView<?> parent) { clearScreen(); }
         });
     }
 
-    @Override protected void onResume() { super.onResume(); loadSnapshots(); }
+    @Override protected void onResume() { super.onResume(); fetchPublishedContest(); }
+
+    private String refreshAccessToken() {
+        String accessToken = Session.accessToken(this);
+        String refresh = Session.refreshToken(this);
+        if (!refresh.isEmpty()) {
+            try {
+                AuthRepository.Tokens refreshed = new AuthRepository().refresh(refresh);
+                if (refreshed.refreshToken().isEmpty()) {
+                    refreshed = new AuthRepository.Tokens(
+                            refreshed.accessToken(), refreshed.idToken(), refresh);
+                }
+                Session.save(this, refreshed);
+                accessToken = refreshed.idToken();
+            } catch (Exception ignored) {
+                // el token actual puede seguir siendo válido
+            }
+        }
+        return accessToken;
+    }
+
+    private void fetchPublishedContest() {
+        executor.execute(() -> {
+            int published = 0;
+            try {
+                String token = refreshAccessToken();
+                for (DrawType type : types) {
+                    try {
+                        ApiRepository.PublishedContest contest =
+                                new ApiRepository().fetchLatest(type, token);
+                        published = contest.contestNumber();
+                        for (ApiRepository.Match match : contest.matches()) {
+                            databases.get(type).saveMatchNames(
+                                    contest.contestNumber(), match.slot() - 1,
+                                    match.local(), match.visitor());
+                        }
+                    } catch (Exception ignored) {
+                        // no hay concurso publicado o no se pudo descargar
+                    }
+                }
+            } catch (Exception ignored) {
+                // se continuará sin nombres
+            }
+            publishedContestNumber = published;
+            runOnUiThread(this::loadSnapshots);
+        });
+    }
 
     private void loadSnapshots() {
         activeContest = 0;
         try {
-            allSnapshots = database.getPredictionSnapshots();
-            Map<Integer, DatabaseHelper.PredictionSnapshot> onePerContest = new LinkedHashMap<>();
-            for (DatabaseHelper.PredictionSnapshot snapshot : allSnapshots) {
-                onePerContest.putIfAbsent(snapshot.contestNumber(), snapshot);
+            for (DrawType type : types) {
+                snapshotsByType.put(type, databases.get(type).getPredictionSnapshots());
             }
-            snapshots = new ArrayList<>(onePerContest.values());
+            Map<Integer, DatabaseHelper.PredictionSnapshot> onePerContest = new LinkedHashMap<>();
+            for (DrawType type : types) {
+                for (DatabaseHelper.PredictionSnapshot snapshot : snapshotsByType.get(type)) {
+                    onePerContest.putIfAbsent(snapshot.contestNumber(), snapshot);
+                }
+            }
+            List<Integer> numbers = new ArrayList<>();
+            if (publishedContestNumber > 0) numbers.add(publishedContestNumber);
+            for (Integer number : onePerContest.keySet()) {
+                if (!numbers.contains(number)) numbers.add(number);
+            }
+            contestNumbers = numbers;
             List<String> labels = new ArrayList<>();
-            for (DatabaseHelper.PredictionSnapshot snapshot : snapshots) {
-                labels.add("Concurso " + snapshot.contestNumber() + " · ambos análisis");
+            for (int number : contestNumbers) {
+                labels.add("Concurso " + number + (number == publishedContestNumber ? " · publicado" : " · pronosticado"));
             }
             contestSpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels));
-            if (snapshots.isEmpty()) clearScreen();
+            if (contestNumbers.isEmpty()) clearScreen();
         } catch (JSONException exception) {
             statusText.setText(R.string.tracking_read_error);
             Toast.makeText(this, R.string.tracking_invalid, Toast.LENGTH_SHORT).show();
@@ -108,40 +180,54 @@ public final class TrackingActivity extends Activity {
 
     private void buildMatchRows() {
         resultInputs.removeAllViews();
-        localInputs.clear(); visitorInputs.clear(); resultLabels.clear(); activeContest = 0;
-        for (int slot = 0; slot < type.slots; slot++) {
-            int capturedSlot = slot;
-            LinearLayout match = new LinearLayout(this);
-            match.setOrientation(LinearLayout.HORIZONTAL);
-            match.setGravity(Gravity.CENTER_VERTICAL);
-            match.setPadding(dp(7), dp(4), dp(7), dp(4));
-            match.setBackground(matchBackground());
+        for (DrawType type : types) {
+            localInputs.put(type, new ArrayList<>());
+            visitorInputs.put(type, new ArrayList<>());
+            resultLabels.put(type, new ArrayList<>());
+        }
+        activeContest = 0;
+        boolean multiple = types.size() > 1;
+        for (DrawType type : types) {
+            if (multiple) {
+                TextView heading = bodyText(type.label);
+                heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                heading.setTextColor(getColor(R.color.primary_dark));
+                heading.setPadding(0, dp(10), 0, dp(4));
+                resultInputs.addView(heading);
+            }
+            for (int slot = 0; slot < type.slots; slot++) {
+                LinearLayout match = new LinearLayout(this);
+                match.setOrientation(LinearLayout.HORIZONTAL);
+                match.setGravity(Gravity.CENTER_VERTICAL);
+                match.setPadding(dp(7), dp(4), dp(7), dp(4));
+                match.setBackground(matchBackground());
 
-            TextView number = bodyText(Integer.toString(slot + 1));
-            number.setGravity(Gravity.CENTER); number.setTextColor(getColor(R.color.muted));
-            match.addView(number, new LinearLayout.LayoutParams(dp(30), dp(44)));
+                TextView number = bodyText(Integer.toString(slot + 1));
+                number.setGravity(Gravity.CENTER); number.setTextColor(getColor(R.color.muted));
+                match.addView(number, new LinearLayout.LayoutParams(dp(30), dp(44)));
 
-            LinearLayout teams = new LinearLayout(this); teams.setOrientation(LinearLayout.VERTICAL);
-            EditText local = teamInput("Equipo local");
-            EditText visitor = teamInput("Equipo visitante");
-            teams.addView(local, new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(22)));
-            teams.addView(visitor, new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(22)));
-            match.addView(teams, new LinearLayout.LayoutParams(0, dp(44), 1));
+                LinearLayout teams = new LinearLayout(this); teams.setOrientation(LinearLayout.VERTICAL);
+                EditText local = teamInput("Equipo local");
+                EditText visitor = teamInput("Equipo visitante");
+                teams.addView(local, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dp(22)));
+                teams.addView(visitor, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dp(22)));
+                match.addView(teams, new LinearLayout.LayoutParams(0, dp(44), 1));
 
-            TextView result = bodyText("—");
-            result.setGravity(Gravity.CENTER); result.setTextSize(19); result.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            result.setBackground(resultBackground(false));
-            match.addView(result, new LinearLayout.LayoutParams(dp(44), dp(44)));
-            localInputs.add(local); visitorInputs.add(visitor); resultLabels.add(result);
-            local.addTextChangedListener(nameWatcher(capturedSlot));
-            visitor.addTextChangedListener(nameWatcher(capturedSlot));
-            match.setOnClickListener(view -> chooseResult(capturedSlot));
-            result.setOnClickListener(view -> chooseResult(capturedSlot));
-            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            rowParams.setMargins(0, 0, 0, dp(3)); resultInputs.addView(match, rowParams);
+                TextView result = bodyText("—");
+                result.setGravity(Gravity.CENTER); result.setTextSize(19); result.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                result.setBackground(resultBackground(false));
+                match.addView(result, new LinearLayout.LayoutParams(dp(44), dp(44)));
+                localInputs.get(type).add(local); visitorInputs.get(type).add(visitor); resultLabels.get(type).add(result);
+
+                DrawType capturedType = type; int capturedSlot = slot;
+                match.setOnClickListener(view -> chooseResult(capturedType, capturedSlot));
+                result.setOnClickListener(view -> chooseResult(capturedType, capturedSlot));
+                LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rowParams.setMargins(0, 0, 0, dp(3)); resultInputs.addView(match, rowParams);
+            }
         }
     }
 
@@ -153,18 +239,9 @@ public final class TrackingActivity extends Activity {
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
         input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(120)});
         input.setSaveEnabled(false);
+        input.setFocusable(false);
+        input.setKeyListener(null);
         return input;
-    }
-
-    private android.text.TextWatcher nameWatcher(int slot) {
-        return new android.text.TextWatcher() {
-            public void beforeTextChanged(CharSequence text, int start, int count, int after) { }
-            public void onTextChanged(CharSequence text, int start, int before, int count) { }
-            public void afterTextChanged(android.text.Editable text) {
-                if (!rendering && activeContest > 0) database.saveMatchNames(activeContest, slot,
-                        localInputs.get(slot).getText().toString(), visitorInputs.get(slot).getText().toString());
-            }
-        };
     }
 
     private GradientDrawable matchBackground() {
@@ -178,47 +255,64 @@ public final class TrackingActivity extends Activity {
         drawable.setStroke(dp(1), selected ? getColor(R.color.pick_green) : getColor(R.color.divider)); return drawable;
     }
 
-    private void chooseResult(int slot) {
+    private void chooseResult(DrawType type, int slot) {
         if (activeContest == 0) return;
-        DatabaseHelper.TrackedResults tracked = database.getTrackedResults(activeContest);
+        DatabaseHelper db = databases.get(type);
+        DatabaseHelper.TrackedResults tracked = db.getTrackedResults(activeContest);
         if ("OFFICIAL".equals(tracked.source())) {
             Toast.makeText(this, "Resultado oficial actualizado", Toast.LENGTH_SHORT).show(); return;
         }
         String[] choices = {"Local  ·  L", "Empate  ·  E", "Visitante  ·  V", "Quitar resultado"};
-        new AlertDialog.Builder(this).setTitle("Resultado · Partido " + (slot + 1)).setItems(choices, (dialog, position) -> {
-            String state = position == 0 ? "L" : position == 1 ? "E" : position == 2 ? "V" : null;
-            database.saveTrackedResult(activeContest, slot, state); renderContest(selectedSnapshot());
-        }).show();
+        new AlertDialog.Builder(this)
+                .setTitle("Resultado · " + type.label + " · Partido " + (slot + 1))
+                .setItems(choices, (dialog, position) -> {
+                    String state = position == 0 ? "L" : position == 1 ? "E" : position == 2 ? "V" : null;
+                    db.saveTrackedResult(activeContest, slot, state);
+                    renderContest(selectedContest());
+                }).show();
     }
 
-    private void renderContest(DatabaseHelper.PredictionSnapshot snapshot) {
-        activeContest = snapshot.contestNumber();
-        DatabaseHelper.TrackedResults tracked = database.getTrackedResults(activeContest);
-        List<DatabaseHelper.TeamNames> names = database.getMatchNames(activeContest); String[] results = tracked.results();
+    private void renderContest(int contestNumber) {
+        activeContest = contestNumber;
         rendering = true;
-        for (int slot = 0; slot < type.slots; slot++) {
-            String local = names.get(slot).local(), visitor = names.get(slot).visitor();
-            localInputs.get(slot).setText(local);
-            visitorInputs.get(slot).setText(visitor);
-            String result = results[slot] == null ? "—" : results[slot]; TextView resultLabel = resultLabels.get(slot);
-            resultLabel.setText(result); boolean selected = results[slot] != null;
-            resultLabel.setTextColor(selected ? Color.WHITE : getColor(R.color.muted)); resultLabel.setBackground(resultBackground(selected));
+        int totalCompleted = 0, totalSlots = 0;
+        boolean allOfficial = true;
+        for (DrawType type : types) {
+            DatabaseHelper db = databases.get(type);
+            DatabaseHelper.TrackedResults tracked = db.getTrackedResults(activeContest);
+            List<DatabaseHelper.TeamNames> names = db.getMatchNames(activeContest);
+            String[] results = tracked.results();
+            for (int slot = 0; slot < type.slots; slot++) {
+                String local = names.get(slot).local(), visitor = names.get(slot).visitor();
+                localInputs.get(type).get(slot).setText(local);
+                visitorInputs.get(type).get(slot).setText(visitor);
+                String result = results[slot] == null ? "—" : results[slot];
+                TextView resultLabel = resultLabels.get(type).get(slot);
+                resultLabel.setText(result);
+                boolean selected = results[slot] != null;
+                resultLabel.setTextColor(selected ? Color.WHITE : getColor(R.color.muted));
+                resultLabel.setBackground(resultBackground(selected));
+            }
+            totalCompleted += tracked.completedCount();
+            totalSlots += type.slots;
+            if (!"OFFICIAL".equals(tracked.source())) allOfficial = false;
         }
         rendering = false;
-        int completed = tracked.completedCount();
-        if ("OFFICIAL".equals(tracked.source())) statusText.setText(getString(R.string.tracking_official_status, type.slots));
-        else if (completed == 0) statusText.setText(R.string.tracking_no_results);
-        else statusText.setText(getString(R.string.tracking_partial_status, completed, type.slots));
-        renderComparison(snapshot, results, completed);
+        if (allOfficial) statusText.setText(getString(R.string.tracking_official_status, totalSlots));
+        else if (totalCompleted == 0) statusText.setText(R.string.tracking_no_results);
+        else statusText.setText(getString(R.string.tracking_partial_status, totalCompleted, totalSlots));
+        renderComparison(contestNumber);
         updateDeleteButtons();
     }
 
     private void updateDeleteButtons() {
         boolean personal = false, automatic = false;
-        for (DatabaseHelper.PredictionSnapshot snapshot : allSnapshots) {
-            if (snapshot.contestNumber() != activeContest) continue;
-            if ("PERSONAL".equals(snapshot.packageType())) personal = true;
-            if ("AUTO".equals(snapshot.packageType())) automatic = true;
+        for (DrawType type : types) {
+            for (DatabaseHelper.PredictionSnapshot snapshot : snapshotsByType.get(type)) {
+                if (snapshot.contestNumber() != activeContest) continue;
+                if ("PERSONAL".equals(snapshot.packageType())) personal = true;
+                if ("AUTO".equals(snapshot.packageType())) automatic = true;
+            }
         }
         deletePersonalButton.setVisibility(personal ? View.VISIBLE : View.GONE);
         deleteAutomaticButton.setVisibility(automatic ? View.VISIBLE : View.GONE);
@@ -229,89 +323,240 @@ public final class TrackingActivity extends Activity {
         String label = "PERSONAL".equals(packageType) ? "personalizado" : "automático";
         new AlertDialog.Builder(this)
                 .setTitle("Eliminar análisis " + label)
-                .setMessage("Se eliminarán sus 20 pronósticos. Los resultados y equipos capturados se conservarán.")
+                .setMessage("Se eliminarán los pronósticos. Los resultados y equipos capturados se conservarán.")
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton("Eliminar", (dialog, which) -> {
-                    database.deletePredictionPackage(activeContest, packageType);
+                    for (DrawType type : types) {
+                        databases.get(type).deletePredictionPackage(activeContest, packageType);
+                    }
                     loadSnapshots();
                     Toast.makeText(this, "Análisis " + label + " eliminado", Toast.LENGTH_SHORT).show();
                 }).show();
     }
 
-    private void renderComparison(DatabaseHelper.PredictionSnapshot snapshot, String[] results, int completed) {
-        comparisonList.removeAllViews(); comparisonList.addView(bodyText("Toca un pronóstico para ver los equipos. Los nombres se guardan automáticamente."));
-        if (completed == 0) { TextView pending = bodyText("Captura al menos un resultado para iniciar la comparación."); pending.setTextColor(getColor(R.color.muted)); comparisonList.addView(pending); }
-        List<DatabaseHelper.PredictionSnapshot> packages = new ArrayList<>();
-        for (DatabaseHelper.PredictionSnapshot candidate : allSnapshots) {
-            if (candidate.contestNumber() == snapshot.contestNumber()) packages.add(candidate);
+    private void renderComparison(int contestNumber) {
+        comparisonList.removeAllViews();
+        comparisonList.addView(bodyText("Toca un pronóstico para ver los equipos."));
+        boolean anyCompleted = false;
+        for (DrawType type : types) {
+            anyCompleted |= databases.get(type).getTrackedResults(contestNumber).completedCount() > 0;
         }
-        packages.sort(Comparator.comparing(DatabaseHelper.PredictionSnapshot::packageType).reversed());
-        for (DatabaseHelper.PredictionSnapshot packageSnapshot : packages) {
-            TextView heading = bodyText("PERSONAL".equals(packageSnapshot.packageType())
-                    ? "Personalizado · 20 pronósticos" : "Automático · 20 pronósticos");
-            heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            heading.setTextColor(getColor(R.color.primary_dark));
-            heading.setPadding(0, dp(12), 0, dp(2));
-            comparisonList.addView(heading);
-            addPackageComparison(packageSnapshot, results, completed);
+        if (!anyCompleted) {
+            TextView pending = bodyText("Captura al menos un resultado para iniciar la comparación.");
+            pending.setTextColor(getColor(R.color.muted));
+            comparisonList.addView(pending);
+        }
+        boolean anyPackage = false;
+        for (DrawType type : types) {
+            List<DatabaseHelper.PredictionSnapshot> packages = new ArrayList<>();
+            for (DatabaseHelper.PredictionSnapshot candidate : snapshotsByType.get(type)) {
+                if (candidate.contestNumber() == contestNumber) packages.add(candidate);
+            }
+            if (packages.isEmpty()) continue;
+            anyPackage = true;
+            if (types.size() > 1) {
+                TextView typeHeading = bodyText(type.label);
+                typeHeading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                typeHeading.setTextColor(getColor(R.color.primary_dark));
+                typeHeading.setPadding(0, dp(12), 0, dp(2));
+                comparisonList.addView(typeHeading);
+            }
+            DatabaseHelper.TrackedResults tracked = databases.get(type).getTrackedResults(contestNumber);
+            String[] results = tracked.results();
+            int completed = tracked.completedCount();
+            packages.sort(Comparator.comparing(DatabaseHelper.PredictionSnapshot::packageType).reversed());
+            for (DatabaseHelper.PredictionSnapshot packageSnapshot : packages) {
+                TextView heading = bodyText(("PERSONAL".equals(packageSnapshot.packageType())
+                        ? "Personalizado · " : "Automático · ")
+                        + packageSnapshot.sequences().size() + " pronósticos");
+                heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                heading.setTextColor(getColor(R.color.primary_dark));
+                heading.setPadding(0, dp(12), 0, dp(2));
+                comparisonList.addView(heading);
+                addPackageComparison(type, packageSnapshot, results, completed);
+            }
+        }
+        if (!anyPackage) {
+            TextView none = bodyText("Sin pronósticos guardados para este concurso.");
+            none.setTextColor(getColor(R.color.muted));
+            comparisonList.addView(none);
         }
     }
 
     private void addPackageComparison(
-            DatabaseHelper.PredictionSnapshot snapshot, String[] results, int completed
+            DrawType type, DatabaseHelper.PredictionSnapshot snapshot, String[] results, int completed
     ) {
         List<PredictionComparison.RankedPrediction> comparisons = PredictionComparison.rank(snapshot.sequences(), results);
         int position = 1;
         for (PredictionComparison.RankedPrediction comparison : comparisons) {
-            String sequence = comparison.sequence().replace("", " ").trim();
-            String prefix = position + ".  ";
-            SpannableString line = new SpannableString(prefix + sequence + "    "
-                    + comparison.matches() + "/" + type.slots + " aciertos");
-            for (int slot = 0; slot < results.length; slot++) {
-                int start = prefix.length() + slot * 2;
-                int color = results[slot] == null ? getColor(R.color.muted)
-                        : comparison.sequence().charAt(slot) == results[slot].charAt(0)
-                        ? getColor(R.color.primary) : getColor(R.color.result_error);
-                line.setSpan(new ForegroundColorSpan(color), start, start + 1,
-                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(4), dp(6), dp(4), dp(6));
+            int rank = position;
+            row.setOnClickListener(view -> showPredictionDetails(type, snapshot, comparison, results, rank));
+
+            TextView rankLabel = bodyText(Integer.toString(position));
+            rankLabel.setGravity(Gravity.CENTER);
+            if (position == 1 && completed > 0) rankLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            rankLabel.setTextColor(getColor(R.color.muted));
+            row.addView(rankLabel, new LinearLayout.LayoutParams(dp(22), dp(40)));
+
+            for (int slot = 0; slot < type.slots; slot++) {
+                char predicted = comparison.sequence().charAt(slot);
+                boolean hasResult = slot < results.length && results[slot] != null;
+                boolean correct = hasResult && results[slot].charAt(0) == predicted;
+                LinearLayout.LayoutParams cellParams = new LinearLayout.LayoutParams(0, dp(34), 1);
+                cellParams.setMargins(dp(2), 0, dp(2), 0);
+                row.addView(resultCell(String.valueOf(predicted), correct, hasResult), cellParams);
             }
-            TextView row = bodyText("");
-            row.setText(line);
-            row.setPadding(0, dp(8), 0, dp(8)); int rank = position;
-            row.setOnClickListener(view -> showPredictionDetails(snapshot, comparison, results, rank));
-            if (position == 1 && completed > 0) row.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            comparisonList.addView(row); position++;
+
+            TextView hits = bodyText(comparison.matches() + "/" + type.slots);
+            hits.setGravity(Gravity.CENTER);
+            hits.setTextColor(getColor(R.color.muted));
+            hits.setTextSize(12);
+            row.addView(hits, new LinearLayout.LayoutParams(dp(46), dp(40)));
+
+            comparisonList.addView(row);
+            position++;
         }
     }
 
-    private void showPredictionDetails(DatabaseHelper.PredictionSnapshot snapshot, PredictionComparison.RankedPrediction comparison, String[] results, int rank) {
-        List<DatabaseHelper.TeamNames> names = database.getMatchNames(snapshot.contestNumber()); StringBuilder details = new StringBuilder();
+    private TextView resultCell(String text, boolean correct, boolean hasResult) {
+        TextView cell = new TextView(this);
+        cell.setText(text);
+        cell.setGravity(Gravity.CENTER);
+        cell.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        cell.setTextSize(13);
+        GradientDrawable background = new GradientDrawable();
+        background.setCornerRadius(dp(6));
+        if (!hasResult) {
+            cell.setTextColor(getColor(R.color.muted));
+            background.setColor(getColor(R.color.card));
+            background.setStroke(dp(1), getColor(R.color.divider));
+        } else if (correct) {
+            cell.setTextColor(Color.WHITE);
+            background.setColor(getColor(R.color.primary));
+        } else {
+            cell.setTextColor(Color.WHITE);
+            background.setColor(getColor(R.color.result_error));
+        }
+        cell.setBackground(background);
+        return cell;
+    }
+
+    private void showPredictionDetails(DrawType type, DatabaseHelper.PredictionSnapshot snapshot, PredictionComparison.RankedPrediction comparison, String[] results, int rank) {
+        List<DatabaseHelper.TeamNames> names = databases.get(type).getMatchNames(snapshot.contestNumber());
+        boolean isPersonal = "PERSONAL".equals(snapshot.packageType());
+        String[] fixedStates = snapshot.fixedStates();
+
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(6), 0, dp(6), 0);
+
+        TextView hits = bodyText(comparison.matches() + "/" + type.slots + " aciertos");
+        hits.setGravity(Gravity.CENTER);
+        hits.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        hits.setPadding(0, dp(4), 0, dp(4));
+        content.addView(hits);
+
         for (int slot = 0; slot < type.slots; slot++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setPadding(dp(4), dp(4), dp(4), dp(4));
+            row.setBackgroundColor(getColor(R.color.row_surface));
+
+            TextView number = bodyText(Integer.toString(slot + 1));
+            number.setGravity(Gravity.CENTER);
+            number.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            row.addView(number, new LinearLayout.LayoutParams(dp(30), dp(44)));
+
             DatabaseHelper.TeamNames teams = names.get(slot);
-            details.append(slot + 1).append(". ").append(teams.local().isBlank() ? "Local" : teams.local()).append(" vs ")
-                    .append(teams.visitor().isBlank() ? "Visitante" : teams.visitor()).append("\nPronóstico: ")
-                    .append(comparison.sequence().charAt(slot)).append(" · Resultado: ")
-                    .append(results[slot] == null ? "Pendiente" : results[slot]).append("\n\n");
+            String teamLabel = teams.local().isBlank() && teams.visitor().isBlank()
+                    ? "Partido " + (slot + 1) : teams.local() + " vs " + teams.visitor();
+            TextView teamView = bodyText(teamLabel);
+            teamView.setTextSize(12);
+            teamView.setTextColor(getColor(R.color.muted));
+            teamView.setGravity(Gravity.CENTER_VERTICAL);
+            teamView.setPadding(dp(4), 0, dp(4), 0);
+            row.addView(teamView, new LinearLayout.LayoutParams(0, dp(44), 1.5f));
+
+            char predicted = comparison.sequence().charAt(slot);
+            boolean hasResult = slot < results.length && results[slot] != null;
+            boolean correct = hasResult && results[slot].charAt(0) == predicted;
+            boolean fixed = isPersonal && fixedStates != null && slot < fixedStates.length && fixedStates[slot] != null;
+
+            addDetailCell(row, "L", predicted == 'L', fixed, hasResult, correct);
+            addDetailCell(row, "E", predicted == 'E', fixed, hasResult, correct);
+            addDetailCell(row, "V", predicted == 'V', fixed, hasResult, correct);
+
+            content.addView(row, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(52)));
         }
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content);
         new AlertDialog.Builder(this).setTitle("Concurso " + snapshot.contestNumber() + " · Posición " + rank)
-                .setMessage(details.toString().trim()).setPositiveButton("Cerrar", null).show();
+                .setView(scroll).setPositiveButton("Cerrar", null).show();
     }
 
-    private DatabaseHelper.PredictionSnapshot selectedSnapshot() { return snapshots.get(contestSpinner.getSelectedItemPosition()); }
+    private void addDetailCell(LinearLayout row, String state, boolean selected, boolean fixed, boolean hasResult, boolean correct) {
+        TextView cell = new TextView(this);
+        cell.setText(state);
+        cell.setGravity(Gravity.CENTER);
+        cell.setTextSize(15);
+        cell.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        int accent;
+        int textColor;
+        if (selected && fixed) {
+            accent = R.color.fixed_yellow;
+            textColor = R.color.ink;
+        } else if (selected && hasResult && !correct) {
+            accent = R.color.result_error;
+            textColor = R.color.card;
+        } else if (selected) {
+            accent = R.color.pick_green;
+            textColor = R.color.card;
+        } else {
+            accent = R.color.pick_green;
+            textColor = R.color.pick_green;
+        }
+        cell.setTextColor(getColor(textColor));
+        GradientDrawable background = new GradientDrawable();
+        background.setCornerRadius(dp(7));
+        background.setColor(getColor(selected ? accent : R.color.card));
+        background.setStroke(dp(2), getColor(accent));
+        cell.setBackground(background);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(40), 1);
+        params.setMargins(dp(3), 0, dp(3), 0);
+        row.addView(cell, params);
+    }
+
+    private int selectedContest() { return contestNumbers.get(contestSpinner.getSelectedItemPosition()); }
 
     private void clearScreen() {
         activeContest = 0; statusText.setText(R.string.tracking_empty); comparisonList.removeAllViews();
         deletePersonalButton.setVisibility(View.GONE);
         deleteAutomaticButton.setVisibility(View.GONE);
         rendering = true;
-        for (int slot = 0; slot < localInputs.size(); slot++) {
-            localInputs.get(slot).setText(""); visitorInputs.get(slot).setText("");
-            resultLabels.get(slot).setText("—"); resultLabels.get(slot).setTextColor(getColor(R.color.muted)); resultLabels.get(slot).setBackground(resultBackground(false));
+        for (DrawType type : types) {
+            for (int slot = 0; slot < type.slots; slot++) {
+                localInputs.get(type).get(slot).setText("");
+                visitorInputs.get(type).get(slot).setText("");
+                TextView resultLabel = resultLabels.get(type).get(slot);
+                resultLabel.setText("—"); resultLabel.setTextColor(getColor(R.color.muted)); resultLabel.setBackground(resultBackground(false));
+            }
         }
         rendering = false;
     }
 
     private TextView bodyText(String text) { TextView view = new TextView(this); view.setText(text); view.setTextColor(getColor(R.color.ink)); view.setTextSize(14); return view; }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
-    @Override protected void onDestroy() { database.close(); super.onDestroy(); }
+
+    @Override protected void onDestroy() {
+        executor.shutdown();
+        for (DrawType type : DrawType.values()) databases.get(type).close();
+        super.onDestroy();
+    }
 }

@@ -6,9 +6,13 @@ import android.annotation.SuppressLint;
 import android.graphics.Color;
 import android.content.Intent;
 import android.graphics.Typeface;
+import android.content.res.ColorStateList;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -17,6 +21,7 @@ import android.widget.Button;
 import android.widget.Spinner;
 import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.EnumMap;
 import java.util.Map;
@@ -29,6 +34,7 @@ import android.widget.ViewFlipper;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
+import android.widget.FrameLayout;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -37,8 +43,11 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -48,9 +57,18 @@ public final class MainActivity extends Activity {
     private static final int MAX_BACKUP_BYTES = 10 * 1024 * 1024;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler publishCheckHandler = new Handler(Looper.getMainLooper());
+    private static final long PUBLISH_POLL_INTERVAL_MS = 10_000;
     private DrawType selectedType = DrawType.MS;
     private Spinner drawSelector;
+    private Spinner packageSizeSpinner;
+    private int packageSize = 20;
     private final Map<DrawType, DatabaseHelper> databases = new EnumMap<>(DrawType.class);
+    private final Set<DrawType> publishedTypes = new HashSet<>();
+    private volatile Map<DrawType, PredictionEngine.Forecast> lastAutomatic = new EnumMap<>(DrawType.class);
+    private volatile Map<DrawType, PredictionEngine.Forecast> lastPersonal = new EnumMap<>(DrawType.class);
+    private volatile Map<DrawType, String[]> lastFavorites = new EnumMap<>(DrawType.class);
+    private final Map<DrawType, Integer> publishedContestNumbers = new EnumMap<>(DrawType.class);
 
 
     private DatabaseHelper database;
@@ -61,17 +79,36 @@ public final class MainActivity extends Activity {
     private TextView pageIndicator;
     private Button previousCombinationButton;
     private Button nextCombinationButton;
+    private Button refreshMatchesButton;
     private GestureDetector combinationGestures;
-    private Button updateButton;
     private Button predictButton;
     private Button backupButton;
     private Button restoreButton;
     private Button trackingButton;
+    private Button logoutButton;
     private String pendingBackup;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (!Session.isLoggedIn(this) && !Session.hasRefreshToken(this)) {
+            goToLogin();
+            return;
+        }
+        setupMain();
+    }
+
+    private void goToLogin() {
+        startActivity(new Intent(this, LoginActivity.class));
+        finish();
+    }
+
+    private void logout() {
+        Session.logout(this);
+        goToLogin();
+    }
+
+    private void setupMain() {
         setContentView(R.layout.activity_main);
 
         for (DrawType type : DrawType.values()) databases.put(type, new DatabaseHelper(this, type));
@@ -83,21 +120,23 @@ public final class MainActivity extends Activity {
         pageIndicator = findViewById(R.id.pageIndicator);
         previousCombinationButton = findViewById(R.id.previousCombinationButton);
         nextCombinationButton = findViewById(R.id.nextCombinationButton);
-        updateButton = findViewById(R.id.updateButton);
+        refreshMatchesButton = findViewById(R.id.refreshMatchesButton);
         predictButton = findViewById(R.id.predictButton);
         backupButton = findViewById(R.id.backupButton);
         restoreButton = findViewById(R.id.restoreButton);
         trackingButton = findViewById(R.id.trackingButton);
+        logoutButton = findViewById(R.id.logoutButton);
 
-        updateButton.setOnClickListener(view -> updateHistory());
         predictButton.setOnClickListener(view -> requestFavorites());
         backupButton.setOnClickListener(view -> createBackup());
         restoreButton.setOnClickListener(view -> chooseBackup());
         trackingButton.setOnClickListener(view -> startActivity(
                 new Intent(this, TrackingActivity.class).putExtra("drawType", selectedType.name())
         ));
+        logoutButton.setOnClickListener(view -> logout());
         previousCombinationButton.setOnClickListener(view -> showPreviousCombination());
         nextCombinationButton.setOnClickListener(view -> showNextCombination());
+        refreshMatchesButton.setOnClickListener(view -> refreshMatches());
         configureCombinationGestures();
 
         drawSelector = findViewById(R.id.drawSelector);
@@ -109,9 +148,23 @@ public final class MainActivity extends Activity {
                 selectedType = position == 0 ? DrawType.MS : DrawType.WEEKEND;
                 database = databases.get(selectedType);
                 clearResults();
-                showStoredState();
+                checkPublishedStatus();
             }
         });
+
+        packageSizeSpinner = findViewById(R.id.packageSizeSpinner);
+        packageSizeSpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                new Integer[]{10, 20, 30, 40, 50, 60}));
+        packageSizeSpinner.setSelection(1); // 20 por defecto
+        packageSizeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onNothingSelected(AdapterView<?> parent) { }
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                packageSize = (Integer) parent.getItemAtPosition(position);
+            }
+        });
+
+        predictButton.setEnabled(false);
+        checkPublishedStatus();
     }
 
     private DrawType[] activeTypes() {
@@ -120,45 +173,109 @@ public final class MainActivity extends Activity {
     }
 
     private void showStoredState() { loadForecasts(false, new EnumMap<>(DrawType.class)); }
-    private void updateHistory() { loadForecasts(true); }
     private void requestFavorites() {
-        showFavoritesStep(activeTypes(), 0, new EnumMap<>(DrawType.class));
+        if (!isSelectedViewPublished()) {
+            toast("El sorteo seleccionado aún no está publicado.");
+            return;
+        }
+        startAnalysis(activeTypes());
+    }
+
+    private void startAnalysis(DrawType[] types) {
+        boolean onlyMs = types.length == 1 && types[0] == DrawType.MS;
+        selectedType = onlyMs ? DrawType.MS : DrawType.WEEKEND;
+        database = databases.get(selectedType);
+        drawSelector.setSelection(onlyMs ? 0 : 1);
+        setBusy(true, "Descargando partidos…");
+        executor.execute(() -> {
+            try {
+                String accessToken = refreshAccessToken();
+                for (DrawType type : types) {
+                    try {
+                        ApiRepository.PublishedContest published =
+                                new ApiRepository().fetchLatest(type, accessToken);
+                        publishedContestNumbers.put(type, published.contestNumber());
+                        for (ApiRepository.Match match : published.matches()) {
+                            databases.get(type).saveMatchNames(
+                                    published.contestNumber(), match.slot() - 1,
+                                    match.local(), match.visitor());
+                        }
+                    } catch (Exception ignored) {
+                        // los nombres de equipos son opcionales
+                    }
+                }
+            } catch (Exception ignored) {
+                // se continuará sin nombres
+            }
+            postUi(() -> {
+                setBusy(false, null);
+                showFavoritesStep(types, 0, new EnumMap<>(DrawType.class));
+            });
+        });
     }
 
     private void showFavoritesStep(DrawType[] types, int index, Map<DrawType, String[]> favorites) {
-        if (index == types.length) { loadForecasts(false, favorites); return; }
+        if (index == types.length) { loadForecasts(true, favorites); return; }
         DrawType type = types[index];
         int limit = favoriteLimit(type);
+        int contestNumber = publishedContestNumbers.getOrDefault(type, 0);
+        List<DatabaseHelper.TeamNames> names = databases.get(type).getMatchNames(contestNumber);
         LinearLayout rows = new LinearLayout(this);
         rows.setOrientation(LinearLayout.VERTICAL);
         rows.setPadding(dp(18), 0, dp(18), 0);
         List<RadioGroup> groups = new java.util.ArrayList<>();
         for (int slot = 0; slot < type.slots; slot++) {
-            LinearLayout row = new LinearLayout(this);
-            row.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout block = new LinearLayout(this);
+            block.setOrientation(LinearLayout.VERTICAL);
+            block.setPadding(0, dp(6), 0, dp(6));
+
+            LinearLayout titleRow = new LinearLayout(this);
+            titleRow.setGravity(Gravity.CENTER_VERTICAL);
+            titleRow.setOrientation(LinearLayout.HORIZONTAL);
             TextView number = bodyText(Integer.toString(slot + 1));
             number.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            row.addView(number, new LinearLayout.LayoutParams(dp(28), dp(40)));
+            number.setGravity(Gravity.CENTER);
+            titleRow.addView(number, new LinearLayout.LayoutParams(dp(30), dp(36)));
+            DatabaseHelper.TeamNames teams = slot < names.size() ? names.get(slot)
+                    : new DatabaseHelper.TeamNames("", "");
+            String teamLabel = teams.local().isBlank() && teams.visitor().isBlank()
+                    ? "Partido " + (slot + 1) : teams.local() + " vs " + teams.visitor();
+            TextView teamView = bodyText(teamLabel);
+            teamView.setTextSize(14);
+            teamView.setPadding(dp(6), 0, 0, 0);
+            titleRow.addView(teamView, new LinearLayout.LayoutParams(0, dp(36), 1));
+            block.addView(titleRow);
+
             RadioGroup choices = new RadioGroup(this);
             choices.setOrientation(RadioGroup.HORIZONTAL);
-            addFavoriteOption(choices, "—"); addFavoriteOption(choices, "L");
-            addFavoriteOption(choices, "E"); addFavoriteOption(choices, "V");
+            addFavoriteOption(choices, "—", null);
+            addFavoriteOption(choices, "Local", "L");
+            addFavoriteOption(choices, "Empate", "E");
+            addFavoriteOption(choices, "Visita", "V");
             choices.check(choices.getChildAt(0).getId());
-            row.addView(choices, new LinearLayout.LayoutParams(0, dp(40), 1));
-            rows.addView(row); groups.add(choices);
+            block.addView(choices, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
+
+            rows.addView(block); groups.add(choices);
         }
-        ScrollView scroll = new ScrollView(this); scroll.addView(rows);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(rows);
+        FrameLayout wrapper = new FrameLayout(this);
+        int scrollHeight = Math.min(dp(500),
+                (int) (getResources().getDisplayMetrics().heightPixels * 0.55f));
+        wrapper.addView(scroll, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, scrollHeight));
         String title = type.label + " · favoritos opcionales";
         new AlertDialog.Builder(this).setTitle(title)
                 .setMessage("Fija hasta " + limit + " casilla" + (limit == 1 ? "." : "s. Estas no entrarán al análisis."))
-                .setView(scroll)
+                .setView(wrapper)
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton(index + 1 == types.length ? "Calcular" : "Continuar", (dialog, which) -> {
                     String[] selections = new String[type.slots]; int count = 0;
                     for (int slot = 0; slot < groups.size(); slot++) {
                         RadioButton chosen = groups.get(slot).findViewById(groups.get(slot).getCheckedRadioButtonId());
-                        String state = chosen == null ? "—" : chosen.getText().toString();
-                        if (!"—".equals(state)) { selections[slot] = state; count++; }
+                        Object tag = chosen == null ? null : chosen.getTag();
+                        if (tag != null) { selections[slot] = tag.toString(); count++; }
                     }
                     if (count > limit) { toast("Máximo " + limit + " favorito" + (limit == 1 ? "" : "s") + " para " + type.label); return; }
                     favorites.put(type, selections);
@@ -170,10 +287,173 @@ public final class MainActivity extends Activity {
         return type == DrawType.MS ? 2 : type == DrawType.WEEKEND ? 4 : 1;
     }
 
-    private void addFavoriteOption(RadioGroup group, String state) {
+    private static boolean hasFavorites(String[] fixedStates) {
+        if (fixedStates == null) return false;
+        for (String state : fixedStates) {
+            if (state != null) return true;
+        }
+        return false;
+    }
+
+    private void savePersonalizedTemplate(
+            DrawType type,
+            PredictionEngine.Forecast forecast,
+            String[] fixedStates,
+            String accessToken
+    ) {
+        try {
+            JSONObject config = new JSONObject();
+            JSONArray favorites = new JSONArray();
+            for (String state : fixedStates) {
+                favorites.put(state == null ? JSONObject.NULL : state);
+            }
+            config.put("favorites", favorites);
+            List<String> combinations = new ArrayList<>();
+            for (PredictionEngine.Recommendation recommendation : forecast.recommendations()) {
+                combinations.add(recommendation.sequence());
+            }
+            new ApiRepository().saveTemplate(
+                    type, forecast.targetContest(), config, combinations, accessToken);
+        } catch (Exception ignored) {
+            // el guardado de la plantilla no debe interrumpir el cálculo
+        }
+    }
+
+    /** Descarga los partidos publicados y guarda los nombres de equipos por casilla. */
+    private void downloadMatchNames(DrawType type, int contestNumber, String accessToken) {
+        try {
+            ApiRepository.PublishedContest published =
+                    new ApiRepository().fetchPublished(type, contestNumber, accessToken);
+            for (ApiRepository.Match match : published.matches()) {
+                databases.get(type).saveMatchNames(
+                        contestNumber, match.slot() - 1, match.local(), match.visitor());
+            }
+        } catch (Exception ignored) {
+            // los nombres de equipos son opcionales
+        }
+    }
+
+    /** Vuelve a descargar los partidos publicados y re-renderiza el paquete de combinaciones. */
+    private void refreshMatches() {
+        if (lastAutomatic.isEmpty()) {
+            toast("Calcula primero un pronóstico.");
+            return;
+        }
+        setBusy(true, "Refrescando partidos…");
+        executor.execute(() -> {
+            try {
+                String accessToken = refreshAccessToken();
+                for (DrawType type : activeTypes()) {
+                    if (lastAutomatic.containsKey(type)) {
+                        downloadMatchNames(type, lastAutomatic.get(type).targetContest(), accessToken);
+                    }
+                }
+            } catch (Exception exception) {
+                showError("No se pudieron refrescar los partidos", exception);
+            }
+            postUi(() -> {
+                setBusy(false, null);
+                if (!lastAutomatic.isEmpty()) {
+                    renderForecasts(lastAutomatic, lastPersonal);
+                    toast("Partidos actualizados");
+                }
+            });
+        });
+    }
+
+    private String refreshAccessToken() {
+        String accessToken = Session.accessToken(this);
+        String refresh = Session.refreshToken(this);
+        if (!refresh.isEmpty()) {
+            try {
+                AuthRepository.Tokens refreshed = new AuthRepository().refresh(refresh);
+                if (refreshed.refreshToken().isEmpty()) {
+                    refreshed = new AuthRepository.Tokens(
+                            refreshed.accessToken(), refreshed.idToken(), refresh);
+                }
+                Session.save(this, refreshed);
+                // El autorizador de Cognito valida el ID token (no el access token).
+                accessToken = refreshed.idToken();
+            } catch (Exception ignored) {
+                // el token actual puede seguir siendo válido
+            }
+        }
+        return accessToken;
+    }
+
+    private void checkPublishedStatus() {
+        executor.execute(() -> {
+            Set<DrawType> found = new HashSet<>();
+            boolean anyExpired = false;
+            try {
+                String accessToken = refreshAccessToken();
+                for (DrawType type : DrawType.values()) {
+                    ApiRepository.PublishStatus status =
+                            new ApiRepository().getPublishStatus(type, accessToken);
+                    if (status == ApiRepository.PublishStatus.PUBLISHED) {
+                        found.add(type);
+                    } else if (status == ApiRepository.PublishStatus.EXPIRED) {
+                        anyExpired = true;
+                    }
+                }
+            } catch (Exception ignored) {
+                // Se reintentará en el siguiente sondeo.
+            }
+            final Set<DrawType> published = found;
+            final boolean expired = anyExpired;
+            postUi(() -> {
+                publishedTypes.clear();
+                publishedTypes.addAll(published);
+                boolean available = isSelectedViewPublished();
+                predictButton.setEnabled(available);
+                statusText.setText(available
+                        ? "Datos disponibles. Toca 'Calcular pronóstico'."
+                        : expired
+                                ? "Concurso finalizado. Esperando el próximo concurso…"
+                                : "Esperando datos del administrador…");
+                // Volver a consultar periódicamente para detectar publicación y vencimiento.
+                if (!isFinishing()) {
+                    publishCheckHandler.removeCallbacksAndMessages(null);
+                    publishCheckHandler.postDelayed(this::checkPublishedStatus, PUBLISH_POLL_INTERVAL_MS);
+                }
+            });
+        });
+    }
+
+    /** Indica si la vista seleccionada (sorteo actual) está publicada. */
+    private boolean isSelectedViewPublished() {
+        for (DrawType type : activeTypes()) {
+            if (!publishedTypes.contains(type)) return false;
+        }
+        return true;
+    }
+
+    private void addFavoriteOption(RadioGroup group, String label, String value) {
         RadioButton option = new RadioButton(this);
-        option.setId(View.generateViewId()); option.setText(state); option.setGravity(Gravity.CENTER);
-        group.addView(option, new RadioGroup.LayoutParams(0, dp(40), 1));
+        option.setId(View.generateViewId());
+        option.setText(label);
+        option.setTag(value);
+        option.setGravity(Gravity.CENTER);
+        option.setButtonDrawable(null);
+        option.setTextSize(13);
+        option.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        option.setPadding(dp(2), 0, dp(2), 0);
+        option.setTextColor(new ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
+                new int[]{getColor(R.color.card), getColor(R.color.pick_green)}
+        ));
+        StateListDrawable background = new StateListDrawable();
+        GradientDrawable checked = new GradientDrawable();
+        checked.setCornerRadius(dp(8));
+        checked.setColor(getColor(R.color.pick_green));
+        GradientDrawable unchecked = new GradientDrawable();
+        unchecked.setCornerRadius(dp(8));
+        unchecked.setColor(getColor(R.color.card));
+        unchecked.setStroke(dp(1), getColor(R.color.pick_green));
+        background.addState(new int[]{android.R.attr.state_checked}, checked);
+        background.addState(new int[]{}, unchecked);
+        option.setBackground(background);
+        group.addView(option, new RadioGroup.LayoutParams(0, dp(46), 1));
     }
 
     private void loadForecasts(boolean download) { loadForecasts(download, new EnumMap<>(DrawType.class)); }
@@ -183,9 +463,20 @@ public final class MainActivity extends Activity {
         setBusy(true, download ? "Descargando y validando históricos…" : "Preparando pronósticos…");
         executor.execute(() -> {
             try {
+                String accessToken = refreshAccessToken();
+                // Vuelve a consultar el concurso publicado para usar el número correcto.
+                for (DrawType type : types) {
+                    try {
+                        ApiRepository.PublishedContest published =
+                                new ApiRepository().fetchLatest(type, accessToken);
+                        publishedContestNumbers.put(type, published.contestNumber());
+                    } catch (Exception ignored) {
+                        publishedContestNumbers.remove(type);
+                    }
+                }
                 Map<DrawType, List<Contest>> histories = new EnumMap<>(DrawType.class);
                 for (DrawType type : types) {
-                    List<Contest> history = download ? new HistoricalRepository(type).download()
+                    List<Contest> history = download ? new ApiRepository().fetchHistory(type, accessToken)
                             : databases.get(type).getAllContests();
                     histories.put(type, history);
                     if (download) {
@@ -205,19 +496,35 @@ public final class MainActivity extends Activity {
                 }
                 Map<DrawType, PredictionEngine.Forecast> automaticForecasts = new EnumMap<>(DrawType.class);
                 Map<DrawType, PredictionEngine.Forecast> personalForecasts = new EnumMap<>(DrawType.class);
-                boolean createPersonalPackage = !favorites.isEmpty();
+                boolean createPersonalPackage = false;
+                for (DrawType type : types) {
+                    if (hasFavorites(favorites.get(type))) {
+                        createPersonalPackage = true;
+                        break;
+                    }
+                }
                 StringBuilder summary = new StringBuilder();
                 for (DrawType type : types) {
                     List<Contest> history = histories.get(type);
-                    PredictionEngine.Forecast automatic = new PredictionEngine(type).analyze(history);
+                    int target = publishedContestNumbers.getOrDefault(type, 0);
+                    PredictionEngine.Forecast automatic = new PredictionEngine(type).analyze(
+                            history, new String[type.slots], target, packageSize);
                     automaticForecasts.put(type, automatic);
+                    if (download) {
+                        downloadMatchNames(type, automatic.targetContest(), accessToken);
+                    }
                     // Refresh AUTO when the user explicitly requests a side-by-side test.
                     databases.get(type).savePrediction(automatic, "AUTO", createPersonalPackage);
                     if (createPersonalPackage) {
+                        String[] fixedStates = favorites.get(type);
                         PredictionEngine.Forecast personal = new PredictionEngine(type).analyze(
-                                history, favorites.getOrDefault(type, new String[type.slots]));
+                                history, fixedStates == null ? new String[type.slots] : fixedStates,
+                                target, packageSize);
                         personalForecasts.put(type, personal);
                         databases.get(type).savePrediction(personal, "PERSONAL", true);
+                        if (hasFavorites(fixedStates)) {
+                            savePersonalizedTemplate(type, personal, fixedStates, accessToken);
+                        }
                     }
                     if (summary.length() > 0) summary.append("\\n");
                     summary.append(type.label).append(": ").append(historySummary(history));
@@ -225,6 +532,9 @@ public final class MainActivity extends Activity {
                 postUi(() -> {
                     setBusy(false, null);
                     statusText.setText(summary.toString());
+                    lastAutomatic = automaticForecasts;
+                    lastPersonal = personalForecasts;
+                    lastFavorites = favorites;
                     renderForecasts(automaticForecasts, personalForecasts);
                     if (download) toast("Históricos y resultados actualizados");
                 });
@@ -386,7 +696,7 @@ public final class MainActivity extends Activity {
             Map<DrawType, PredictionEngine.Forecast> automaticForecasts,
             Map<String, Map<DrawType, List<String>>> savedByGroup
     ) {
-        for (int index = 0; index < 20; index++) {
+        for (int index = 0; index < packageSize; index++) {
             LinearLayout page = new LinearLayout(this);
             page.setOrientation(LinearLayout.VERTICAL);
             addPackageSection(page, "Personalizado · favoritos", "PERSONAL", index,
@@ -408,7 +718,7 @@ public final class MainActivity extends Activity {
             Map<String, Map<DrawType, List<String>>> savedByGroup
     ) {
         Map<DrawType, List<String>> saved = savedByGroup.get(packageType);
-        for (int index = 0; index < 20; index++) {
+        for (int index = 0; index < packageSize; index++) {
             LinearLayout page = new LinearLayout(this);
             page.setOrientation(LinearLayout.VERTICAL);
             addPackageSection(page, title, packageType, index, forecasts, savedByGroup);
@@ -440,13 +750,20 @@ public final class MainActivity extends Activity {
             heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             heading.setPadding(0, dp(12), 0, dp(8));
             page.addView(heading);
-            page.addView(combinationPage(recommendation));
+            String[] fixedStates = "PERSONAL".equals(packageType) ? lastFavorites.get(type) : null;
+            page.addView(combinationPage(recommendation, type, forecasts.get(type).targetContest(), fixedStates));
         }
     }
 
-    private LinearLayout combinationPage(PredictionEngine.Recommendation recommendation) {
+    private LinearLayout combinationPage(
+            PredictionEngine.Recommendation recommendation,
+            DrawType type,
+            int contestNumber,
+            String[] fixedStates
+    ) {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
+        List<DatabaseHelper.TeamNames> names = databases.get(type).getMatchNames(contestNumber);
 
         for (int slot = 0; slot < recommendation.sequence().length(); slot++) {
             LinearLayout row = new LinearLayout(this);
@@ -460,10 +777,22 @@ public final class MainActivity extends Activity {
             number.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             row.addView(number, new LinearLayout.LayoutParams(dp(34), dp(48)));
 
+            DatabaseHelper.TeamNames teams = slot < names.size() ? names.get(slot)
+                    : new DatabaseHelper.TeamNames("", "");
+            String teamLabel = teams.local().isBlank() && teams.visitor().isBlank()
+                    ? "" : teams.local() + " vs " + teams.visitor();
+            TextView teamView = bodyText(teamLabel);
+            teamView.setTextSize(12);
+            teamView.setTextColor(getColor(R.color.muted));
+            teamView.setGravity(Gravity.CENTER_VERTICAL);
+            teamView.setPadding(dp(4), 0, dp(4), 0);
+            row.addView(teamView, new LinearLayout.LayoutParams(0, dp(48), 1.5f));
+
             char selected = recommendation.sequence().charAt(slot);
-            addStateCell(row, "L", selected == 'L');
-            addStateCell(row, "E", selected == 'E');
-            addStateCell(row, "V", selected == 'V');
+            boolean fixed = fixedStates != null && slot < fixedStates.length && fixedStates[slot] != null;
+            addStateCell(row, "L", selected == 'L', fixed);
+            addStateCell(row, "E", selected == 'E', fixed);
+            addStateCell(row, "V", selected == 'V', fixed);
             page.addView(row, new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, dp(56)
             ));
@@ -489,16 +818,17 @@ public final class MainActivity extends Activity {
         return page;
     }
 
-    private void addStateCell(LinearLayout row, String state, boolean selected) {
+    private void addStateCell(LinearLayout row, String state, boolean selected, boolean fixed) {
         TextView cell = bodyText(state);
         cell.setGravity(Gravity.CENTER);
         cell.setTextSize(18);
         cell.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        cell.setTextColor(getColor(selected ? R.color.card : R.color.pick_green));
+        int accent = fixed ? R.color.fixed_yellow : R.color.pick_green;
+        cell.setTextColor(getColor(selected ? (fixed ? R.color.ink : R.color.card) : accent));
         GradientDrawable background = new GradientDrawable();
         background.setCornerRadius(dp(8));
-        background.setColor(getColor(selected ? R.color.pick_green : R.color.card));
-        background.setStroke(dp(2), getColor(R.color.pick_green));
+        background.setColor(getColor(selected ? accent : R.color.card));
+        background.setStroke(dp(2), getColor(accent));
         cell.setBackground(background);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(46), 1);
         params.setMargins(dp(6), 0, dp(6), 0);
@@ -627,7 +957,6 @@ public final class MainActivity extends Activity {
 
     private void setBusy(boolean busy, String message) {
         if (drawSelector != null) drawSelector.setEnabled(!busy);
-        updateButton.setEnabled(!busy);
         predictButton.setEnabled(!busy);
         backupButton.setEnabled(!busy);
         restoreButton.setEnabled(!busy);
@@ -673,6 +1002,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        publishCheckHandler.removeCallbacksAndMessages(null);
         executor.execute(() -> {
             for (DatabaseHelper helper : databases.values()) helper.close();
         });

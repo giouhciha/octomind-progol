@@ -10,8 +10,8 @@ android {
         applicationId = "mx.octomind.progol"
         minSdk = 26
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.4.7"
+        versionCode = 46
+        versionName = "0.8.2"
 
         testInstrumentationRunner = "mx.octomind.progol.IntegrationInstrumentation"
     }
@@ -51,4 +51,5 @@ tasks.matching { it.name == "assembleDebug" }.configureEach {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

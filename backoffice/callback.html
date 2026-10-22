@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Iniciando sesión…</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="card login-card">
+    <p id="status">Autenticando…</p>
+  </div>
+  <script src="config.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const error = params.get('error');
+
+    function fail(msg) {
+      document.getElementById('status').textContent = msg;
+      setTimeout(() => window.location.href = 'index.html', 3000);
+    }
+
+    if (error) {
+      fail('Error de inicio de sesión: ' + error);
+    } else if (!code) {
+      fail('No se recibió código. Redirigiendo…');
+    } else {
+      const body = new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: CONFIG.clientId,
+        code: code,
+        redirect_uri: CONFIG.redirectUri,
+      });
+      fetch(`${CONFIG.cognitoDomain}/oauth2/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      })
+        .then(r => {
+          if (!r.ok) throw new Error('Token HTTP ' + r.status);
+          return r.json();
+        })
+        .then(tokens => {
+          localStorage.setItem('access_token', tokens.access_token);
+          localStorage.setItem('id_token', tokens.id_token || '');
+          localStorage.setItem('refresh_token', tokens.refresh_token || '');
+          window.location.href = 'app.html';
+        })
+        .catch(err => fail('No se pudo obtener el token: ' + err.message));
+    }
+  </script>
+</body>
+</html>

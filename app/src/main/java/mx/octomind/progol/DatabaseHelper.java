@@ -243,7 +243,16 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                     }
                     sequences.add(sequence);
                 }
-                latestByContest.put(key, new PredictionSnapshot(target, packageType, sequences));
+                String[] fixedStates = new String[type.slots];
+                if (payload.has("fixedStates")) {
+                    JSONArray fixedRows = payload.getJSONArray("fixedStates");
+                    for (int slot = 0; slot < type.slots && slot < fixedRows.length(); slot++) {
+                        if (!fixedRows.isNull(slot)) {
+                            fixedStates[slot] = fixedRows.getString(slot);
+                        }
+                    }
+                }
+                latestByContest.put(key, new PredictionSnapshot(target, packageType, sequences, fixedStates));
             }
         }
         List<PredictionSnapshot> snapshots = new ArrayList<>(latestByContest.values());
@@ -561,7 +570,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
         return contests.size();
     }
 
-    public record PredictionSnapshot(int contestNumber, String packageType, List<String> sequences) {
+    public record PredictionSnapshot(int contestNumber, String packageType, List<String> sequences, String[] fixedStates) {
         public PredictionSnapshot {
             sequences = List.copyOf(sequences);
         }

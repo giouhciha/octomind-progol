@@ -1,0 +1,301 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Octomind Progol backend (Cognito + DynamoDB + API Gateway + Lambda)
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        CONTESTS_TABLE: !Ref ContestsTable
+        TEMPLATES_TABLE: !Ref TemplatesTable
+        USERS_TABLE: !Ref UsersTable
+        LEADERBOARD_TABLE: !Ref LeaderboardTable
+        HISTORY_TABLE: !Ref HistoryTable
+
+Resources:
+  # ── Cognito ────────────────────────────────────────────────
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: OctomindUsers
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: OctomindApp
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      CallbackURLs:
+        - http://localhost:8000/callback.html
+      LogoutURLs:
+        - http://localhost:8000/index.html
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+        - aws.cognito.signin.user.admin
+      AllowedOAuthFlowsUserPoolClient: true
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: octomind-progol
+      UserPoolId: !Ref UserPool
+
+  AdminsGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admins
+      UserPoolId: !Ref UserPool
+      Description: Administradores del backoffice
+
+  # ── DynamoDB ───────────────────────────────────────────────
+  ContestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: OctomindContests
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: drawType
+          AttributeType: S
+        - AttributeName: contestNumber
+          AttributeType: N
+      KeySchema:
+        - AttributeName: drawType
+          KeyType: HASH
+        - AttributeName: contestNumber
+          KeyType: RANGE
+
+  TemplatesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: OctomindTemplates
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: templateId
+          AttributeType: S
+        - AttributeName: contestKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: templateId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: contest-index
+          KeySchema:
+            - AttributeName: contestKey
+              KeyType: HASH
+            - AttributeName: templateId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: OctomindUsers
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  LeaderboardTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: OctomindLeaderboard
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: userId
+          KeyType: RANGE
+
+  HistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: OctomindHistory
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: drawType
+          AttributeType: S
+        - AttributeName: contestNumber
+          AttributeType: N
+      KeySchema:
+        - AttributeName: drawType
+          KeyType: HASH
+        - AttributeName: contestNumber
+          KeyType: RANGE
+
+  # ── API Gateway ────────────────────────────────────────────
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: OctomindApi
+      StageName: prod
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt UserPool.Arn
+      GatewayResponses:
+        UNAUTHORIZED:
+          StatusCode: 401
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              Access-Control-Allow-Methods: "'GET,POST,DELETE,OPTIONS'"
+        ACCESS_DENIED:
+          StatusCode: 403
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              Access-Control-Allow-Methods: "'GET,POST,DELETE,OPTIONS'"
+
+  # ── Lambda ─────────────────────────────────────────────────
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OctomindApi
+      Handler: app.lambda_handler
+      CodeUri: src/api/
+      Environment:
+        Variables:
+          CONTESTS_TABLE: !Ref ContestsTable
+          TEMPLATES_TABLE: !Ref TemplatesTable
+          USERS_TABLE: !Ref UsersTable
+          LEADERBOARD_TABLE: !Ref LeaderboardTable
+          HISTORY_TABLE: !Ref HistoryTable
+          USER_POOL_ID: !Ref UserPool
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /{proxy+}
+            Method: GET
+        Post:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /{proxy+}
+            Method: POST
+        Delete:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /{proxy+}
+            Method: DELETE
+        Options:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /{proxy+}
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ContestsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TemplatesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref LeaderboardTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref HistoryTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:AdminListGroupsForUser
+              Resource: !GetAtt UserPool.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt RefreshHistoryFunction.Arn
+
+  RefreshHistoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OctomindRefreshHistory
+      Handler: refresh.lambda_handler
+      CodeUri: src/history/
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          HISTORY_TABLE: !Ref HistoryTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref HistoryTable
+
+  PostConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OctomindPostConfirmation
+      Handler: post_confirmation.lambda_handler
+      CodeUri: src/users/
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref UsersTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        PostConfirmation:
+          Type: Cognito
+          Properties:
+            UserPool: !Ref UserPool
+            Trigger: PostConfirmation
+
+Outputs:
+  ApiUrl:
+    Description: URL de la API
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+  UserPoolId:
+    Description: ID del User Pool de Cognito
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Description: ID del App Client de Cognito
+    Value: !Ref UserPoolClient
