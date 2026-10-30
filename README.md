@@ -4,7 +4,7 @@ Aplicacion Android nativa y motor reproducible para estimar las probabilidades
 `L`, `E` y `V` del siguiente concurso de Mitad de Semana (9 partidos),
 Fin de Semana (14) y Revancha (7).
 
-## Version Android (0.9.0)
+## Version Android (0.10.0)
 
 - Descarga y valida el historico oficial de cada uno de los tres sorteos.
 - Selector entre Mitad de Semana y Fin de Semana + Revancha. En esta ultima

@@ -198,6 +198,31 @@
                     android:textSize="20sp" />
             </LinearLayout>
 
+            <LinearLayout
+                android:id="@+id/personalControls"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <Spinner
+                    android:id="@+id/personalSelector"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:contentDescription="@string/personal_selector" />
+
+                <Button
+                    android:id="@+id/newPersonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/new_personal"
+                    android:textAllCaps="false" />
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/combinationMeta"
                 android:layout_width="match_parent"

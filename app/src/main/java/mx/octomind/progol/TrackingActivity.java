@@ -370,9 +370,11 @@ public final class TrackingActivity extends Activity {
             int completed = tracked.completedCount();
             packages.sort(Comparator.comparing(DatabaseHelper.PredictionSnapshot::packageType).reversed());
             for (DatabaseHelper.PredictionSnapshot packageSnapshot : packages) {
-                TextView heading = bodyText(("PERSONAL".equals(packageSnapshot.packageType())
-                        ? "Personalizado · " : "Automático · ")
-                        + packageSnapshot.sequences().size() + " pronósticos");
+                boolean isPersonal = "PERSONAL".equals(packageSnapshot.packageType());
+                String label = isPersonal
+                        ? "Personalizado · " + (packageSnapshot.name() == null ? "Principal" : packageSnapshot.name())
+                        : "Automático";
+                TextView heading = bodyText(label + " · " + packageSnapshot.sequences().size() + " pronósticos");
                 heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
                 heading.setTextColor(getColor(R.color.primary_dark));
                 heading.setPadding(0, dp(12), 0, dp(2));
@@ -398,12 +400,15 @@ public final class TrackingActivity extends Activity {
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(4), dp(6), dp(4), dp(6));
             int rank = position;
-            boolean marked = isMarked(snapshot.contestNumber(), snapshot.packageType(), comparison.originalRank());
+            String packageKey = "PERSONAL".equals(snapshot.packageType())
+                    ? "PERSONAL:" + (snapshot.name() == null ? "Principal" : snapshot.name())
+                    : "AUTO";
+            boolean marked = isMarked(snapshot.contestNumber(), packageKey, comparison.originalRank());
             row.setBackgroundColor(marked ? getColor(R.color.marked_row) : Color.TRANSPARENT);
             row.setOnClickListener(view -> showPredictionDetails(type, snapshot, comparison, results, rank));
             row.setOnLongClickListener(view -> {
-                toggleMark(snapshot.contestNumber(), snapshot.packageType(), comparison.originalRank());
-                boolean nowMarked = isMarked(snapshot.contestNumber(), snapshot.packageType(), comparison.originalRank());
+                toggleMark(snapshot.contestNumber(), packageKey, comparison.originalRank());
+                boolean nowMarked = isMarked(snapshot.contestNumber(), packageKey, comparison.originalRank());
                 row.setBackgroundColor(nowMarked ? getColor(R.color.marked_row) : Color.TRANSPARENT);
                 return true;
             });

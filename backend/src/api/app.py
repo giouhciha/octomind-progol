@@ -161,6 +161,7 @@ def create_template(user_id: str, email: str, event: dict) -> dict:
     contest_number = body.get("contestNumber")
     config = body.get("config") or {}
     combinations = body.get("combinations") or []
+    name = (body.get("name") or "").strip()[:40] or "Principal"
 
     if not draw_type or not contest_number:
         return resp(400, {"error": "Faltan drawType o contestNumber"})
@@ -175,6 +176,7 @@ def create_template(user_id: str, email: str, event: dict) -> dict:
         "drawType": draw_type,
         "contestNumber": int(contest_number),
         "email": email,
+        "name": name,
         "config": config,
         "combinations": combinations,
         "createdAt": int(time.time()),
@@ -200,6 +202,7 @@ def get_leaderboard() -> dict:
         rows.append(
             {
                 "userId": item.get("userId"),
+                "name": item.get("name", ""),
                 "email": item.get("email", ""),
                 "totalHits": total,
                 "contestsPlayed": played,
@@ -295,13 +298,17 @@ def admin_publish(admin: bool, event: dict) -> dict:
         )
         for tpl in tpl_result.get("Items", []):
             user_id = tpl["userId"]
+            name = tpl.get("name", "") or "Principal"
+            entry_id = f"{user_id}#{name}"
             hits = _best_hits(tpl.get("combinations") or [], results)
             current = leaderboard.get_item(
-                Key={"pk": LEADERBOARD_PK, "userId": user_id}
+                Key={"pk": LEADERBOARD_PK, "entryId": entry_id}
             ).get("Item", {})
             updated = {
                 "pk": LEADERBOARD_PK,
+                "entryId": entry_id,
                 "userId": user_id,
+                "name": name,
                 "email": tpl.get("email", current.get("email", "")),
                 "totalHits": int(current.get("totalHits", 0)) + hits,
                 "contestsPlayed": int(current.get("contestsPlayed", 0)) + 1,

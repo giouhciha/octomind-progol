@@ -139,12 +139,12 @@ Resources:
       AttributeDefinitions:
         - AttributeName: pk
           AttributeType: S
-        - AttributeName: userId
+        - AttributeName: entryId
           AttributeType: S
       KeySchema:
         - AttributeName: pk
           KeyType: HASH
-        - AttributeName: userId
+        - AttributeName: entryId
           KeyType: RANGE
 
   HistoryTable:

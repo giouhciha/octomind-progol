@@ -53,6 +53,7 @@ public final class ApiRepository {
     public String saveTemplate(
             DrawType type,
             int contestNumber,
+            String name,
             JSONObject config,
             List<String> combinations,
             String accessToken
@@ -60,6 +61,7 @@ public final class ApiRepository {
         JSONObject body = new JSONObject();
         body.put("drawType", type.name());
         body.put("contestNumber", contestNumber);
+        body.put("name", name);
         body.put("config", config);
         body.put("combinations", new JSONArray(combinations));
         return post(BASE_URL + "templates", body.toString(), accessToken);

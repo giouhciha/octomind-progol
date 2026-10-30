@@ -21,7 +21,7 @@ import java.util.Map;
 
 public final class DatabaseHelper extends SQLiteOpenHelper {
     private final DrawType type;
-    private static final int DATABASE_VERSION = 4;
+    private static final int DATABASE_VERSION = 5;
     private static final int BACKUP_SCHEMA_VERSION = 4;
 
     public DatabaseHelper(Context context) {
@@ -53,6 +53,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                         + "source_contest INTEGER NOT NULL,"
                         + "target_contest INTEGER NOT NULL,"
                         + "package_type TEXT NOT NULL DEFAULT 'AUTO',"
+                        + "name TEXT,"
                         + "model_version TEXT NOT NULL,"
                         + "payload TEXT NOT NULL)"
         );
@@ -68,6 +69,8 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 3) createMatchNamesTable(database);
         if (oldVersion < 4) database.execSQL(
                 "ALTER TABLE prediction_runs ADD COLUMN package_type TEXT NOT NULL DEFAULT 'AUTO'");
+        if (oldVersion < 5) database.execSQL(
+                "ALTER TABLE prediction_runs ADD COLUMN name TEXT");
     }
 
     private void createMatchNamesTable(SQLiteDatabase database) {
@@ -193,19 +196,34 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void savePrediction(PredictionEngine.Forecast forecast, String packageType, boolean replaceExisting) {
+        savePrediction(forecast, packageType, replaceExisting, null);
+    }
+
+    public void savePrediction(PredictionEngine.Forecast forecast, String packageType, boolean replaceExisting, String name) {
         if (!"AUTO".equals(packageType) && !"PERSONAL".equals(packageType))
             throw new IllegalArgumentException("Tipo de paquete inválido");
+        boolean personal = "PERSONAL".equals(packageType);
+        String effectiveName = personal && name != null && !name.isBlank() ? name.trim() : null;
+        String selection;
+        String[] args;
+        if (personal) {
+            selection = "target_contest = ? AND package_type = ? AND name = ?";
+            args = new String[]{Integer.toString(forecast.targetContest()), packageType, effectiveName};
+        } else {
+            selection = "target_contest = ? AND package_type = ? AND name IS NULL";
+            args = new String[]{Integer.toString(forecast.targetContest()), packageType};
+        }
         try (Cursor cursor = getReadableDatabase().query("prediction_runs", new String[]{"id"},
-                "target_contest = ? AND package_type = ?", new String[]{Integer.toString(forecast.targetContest()), packageType}, null, null, null)) {
+                selection, args, null, null, null)) {
             if (cursor.moveToFirst() && !replaceExisting) return;
         }
-        if (replaceExisting) getWritableDatabase().delete("prediction_runs", "target_contest = ? AND package_type = ?",
-                new String[]{Integer.toString(forecast.targetContest()), packageType});
+        if (replaceExisting) getWritableDatabase().delete("prediction_runs", selection, args);
         ContentValues values = new ContentValues();
         values.put("created_at", Instant.now().toString());
         values.put("source_contest", forecast.sourceContest());
         values.put("target_contest", forecast.targetContest());
         values.put("package_type", packageType);
+        if (effectiveName == null) values.putNull("name"); else values.put("name", effectiveName);
         values.put("model_version", forecast.modelVersion());
         values.put("payload", forecast.toJson().toString());
         getWritableDatabase().insertOrThrow("prediction_runs", null, values);
@@ -227,7 +245,9 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
             while (cursor.moveToNext()) {
                 int target = cursor.getInt(cursor.getColumnIndexOrThrow("target_contest"));
                 String packageType = cursor.getString(cursor.getColumnIndexOrThrow("package_type"));
-                String key = target + ":" + packageType;
+                int nameColumn = cursor.getColumnIndexOrThrow("name");
+                String name = cursor.isNull(nameColumn) ? null : cursor.getString(nameColumn);
+                String key = target + ":" + packageType + ":" + name;
                 if (latestByContest.containsKey(key)) {
                     continue;
                 }
@@ -252,7 +272,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                         }
                     }
                 }
-                latestByContest.put(key, new PredictionSnapshot(target, packageType, sequences, fixedStates));
+                latestByContest.put(key, new PredictionSnapshot(target, packageType, name, sequences, fixedStates));
             }
         }
         List<PredictionSnapshot> snapshots = new ArrayList<>(latestByContest.values());
@@ -385,6 +405,8 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 item.put("sourceContest", cursor.getInt(cursor.getColumnIndexOrThrow("source_contest")));
                 item.put("targetContest", cursor.getInt(cursor.getColumnIndexOrThrow("target_contest")));
                 item.put("packageType", cursor.getString(cursor.getColumnIndexOrThrow("package_type")));
+                int nameColumn = cursor.getColumnIndexOrThrow("name");
+                if (!cursor.isNull(nameColumn)) item.put("name", cursor.getString(nameColumn));
                 item.put("modelVersion", cursor.getString(cursor.getColumnIndexOrThrow("model_version")));
                 item.put("payload", new JSONObject(
                         cursor.getString(cursor.getColumnIndexOrThrow("payload"))
@@ -482,10 +504,11 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 String packageType = item.optString("packageType", "AUTO");
                 if (!"AUTO".equals(packageType) && !"PERSONAL".equals(packageType)) throw new JSONException("Tipo de paquete inválido");
                 values.put("package_type", packageType);
+                if (item.has("name")) values.put("name", item.getString("name"));
                 values.put("model_version", item.getString("modelVersion"));
                 JSONObject payload = item.getJSONObject("payload");
                 JSONArray picks = payload.getJSONArray("recommendations");
-                if (picks.length() != 20) throw new JSONException("Se requieren 20 pronósticos");
+                if (picks.length() < 1 || picks.length() > 60) throw new JSONException("Cantidad de pronósticos inválida");
                 for (int pick = 0; pick < picks.length(); pick++) {
                     String sequence = picks.getJSONObject(pick).getString("sequence");
                     if (!sequence.matches("[LEV]{" + type.slots + "}")) throw new JSONException("Pronóstico inválido");
@@ -570,7 +593,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
         return contests.size();
     }
 
-    public record PredictionSnapshot(int contestNumber, String packageType, List<String> sequences, String[] fixedStates) {
+    public record PredictionSnapshot(int contestNumber, String packageType, String name, List<String> sequences, String[] fixedStates) {
         public PredictionSnapshot {
             sequences = List.copyOf(sequences);
         }

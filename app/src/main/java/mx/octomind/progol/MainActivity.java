@@ -18,6 +18,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
@@ -89,6 +90,13 @@ public final class MainActivity extends Activity {
     private Button trackingButton;
     private Button logoutButton;
     private String pendingBackup;
+    private Spinner personalSelector;
+    private Button newPersonalButton;
+    private View personalControls;
+    private boolean refreshingPersonalSelector;
+    private int currentTargetContest;
+    private String selectedPersonalName;
+    private static final int MAX_PERSONAL = 10;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -128,6 +136,9 @@ public final class MainActivity extends Activity {
         restoreButton = findViewById(R.id.restoreButton);
         trackingButton = findViewById(R.id.trackingButton);
         logoutButton = findViewById(R.id.logoutButton);
+        personalSelector = findViewById(R.id.personalSelector);
+        newPersonalButton = findViewById(R.id.newPersonalButton);
+        personalControls = findViewById(R.id.personalControls);
 
         predictButton.setOnClickListener(view -> requestFavorites());
         backupButton.setOnClickListener(view -> createBackup());
@@ -136,6 +147,18 @@ public final class MainActivity extends Activity {
                 new Intent(this, TrackingActivity.class).putExtra("drawType", selectedType.name())
         ));
         logoutButton.setOnClickListener(view -> logout());
+        newPersonalButton.setOnClickListener(view -> requestNewPersonal());
+        personalSelector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onNothingSelected(AdapterView<?> parent) { }
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (refreshingPersonalSelector) return;
+                Object item = parent.getItemAtPosition(position);
+                if (item != null && !item.toString().equals(selectedPersonalName)) {
+                    selectedPersonalName = item.toString();
+                    if (!lastAutomatic.isEmpty()) renderForecasts(lastAutomatic, lastPersonal);
+                }
+            }
+        });
         previousCombinationButton.setOnClickListener(view -> showPreviousCombination());
         nextCombinationButton.setOnClickListener(view -> showNextCombination());
         refreshMatchesButton.setOnClickListener(view -> refreshMatches());
@@ -186,16 +209,16 @@ public final class MainActivity extends Activity {
                 : new DrawType[]{DrawType.WEEKEND, DrawType.REVANCHA};
     }
 
-    private void showStoredState() { loadForecasts(false, new EnumMap<>(DrawType.class)); }
+    private void showStoredState() { loadForecasts(false); }
     private void requestFavorites() {
         if (!isSelectedViewPublished()) {
             toast("El sorteo seleccionado aún no está publicado.");
             return;
         }
-        startAnalysis(activeTypes());
+        startAnalysis(activeTypes(), null);
     }
 
-    private void startAnalysis(DrawType[] types) {
+    private void startAnalysis(DrawType[] types, String name) {
         boolean onlyMs = types.length == 1 && types[0] == DrawType.MS;
         selectedType = onlyMs ? DrawType.MS : DrawType.WEEKEND;
         database = databases.get(selectedType);
@@ -223,13 +246,13 @@ public final class MainActivity extends Activity {
             }
             postUi(() -> {
                 setBusy(false, null);
-                showFavoritesStep(types, 0, new EnumMap<>(DrawType.class));
+                showFavoritesStep(types, 0, new EnumMap<>(DrawType.class), name);
             });
         });
     }
 
-    private void showFavoritesStep(DrawType[] types, int index, Map<DrawType, String[]> favorites) {
-        if (index == types.length) { loadForecasts(true, favorites); return; }
+    private void showFavoritesStep(DrawType[] types, int index, Map<DrawType, String[]> favorites, String name) {
+        if (index == types.length) { loadForecasts(true, favorites, name); return; }
         DrawType type = types[index];
         int limit = favoriteLimit(type);
         int contestNumber = publishedContestNumbers.getOrDefault(type, 0);
@@ -293,12 +316,80 @@ public final class MainActivity extends Activity {
                     }
                     if (count > limit) { toast("Máximo " + limit + " favorito" + (limit == 1 ? "" : "s") + " para " + type.label); return; }
                     favorites.put(type, selections);
-                    showFavoritesStep(types, index + 1, favorites);
+                    showFavoritesStep(types, index + 1, favorites, name);
                 }).show();
     }
 
     private int favoriteLimit(DrawType type) {
         return type == DrawType.MS ? 3 : type == DrawType.WEEKEND ? 4 : 1;
+    }
+
+    private void requestNewPersonal() {
+        if (!isSelectedViewPublished()) {
+            toast("El sorteo seleccionado aún no está publicado.");
+            return;
+        }
+        List<String> names = currentPersonalNames(currentTargetContest);
+        if (names.size() >= MAX_PERSONAL) {
+            toast("Máximo " + MAX_PERSONAL + " pronósticos personalizados.");
+            return;
+        }
+        promptPersonalName(names.size());
+    }
+
+    private void promptPersonalName(int count) {
+        EditText input = new EditText(this);
+        input.setHint("Nombre del pronóstico");
+        input.setText("Personalizado " + (count + 1));
+        input.setSelectAllOnFocus(true);
+        new AlertDialog.Builder(this)
+                .setTitle("Nuevo pronóstico personalizado")
+                .setView(input)
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Crear", (dialog, which) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) {
+                        toast("Escribe un nombre para el pronóstico.");
+                        return;
+                    }
+                    startAnalysis(activeTypes(), name);
+                }).show();
+    }
+
+    private List<String> currentPersonalNames(int contestNumber) {
+        List<String> names = new ArrayList<>();
+        try {
+            for (DatabaseHelper.PredictionSnapshot snapshot : databases.get(selectedType).getPredictionSnapshots()) {
+                if (snapshot.contestNumber() == contestNumber && "PERSONAL".equals(snapshot.packageType())) {
+                    String name = snapshot.name() == null ? "Principal" : snapshot.name();
+                    if (!names.contains(name)) names.add(name);
+                }
+            }
+        } catch (Exception ignored) {
+            // sin nombres
+        }
+        java.util.Collections.sort(names);
+        return names;
+    }
+
+    private void refreshPersonalControls(int contestNumber) {
+        List<String> names = currentPersonalNames(contestNumber);
+        refreshingPersonalSelector = true;
+        personalSelector.setAdapter(new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item, names));
+        if (names.isEmpty()) {
+            personalControls.setVisibility(View.GONE);
+            selectedPersonalName = null;
+        } else {
+            if (selectedPersonalName == null || !names.contains(selectedPersonalName)) {
+                selectedPersonalName = names.get(0);
+            }
+            personalSelector.setSelection(names.indexOf(selectedPersonalName));
+            personalControls.setVisibility(View.VISIBLE);
+            newPersonalButton.setEnabled(names.size() < MAX_PERSONAL);
+            newPersonalButton.setText("Nuevo (" + names.size() + "/" + MAX_PERSONAL + ")");
+        }
+        refreshingPersonalSelector = false;
     }
 
     private static boolean hasFavorites(String[] fixedStates) {
@@ -312,6 +403,7 @@ public final class MainActivity extends Activity {
     private void savePersonalizedTemplate(
             DrawType type,
             PredictionEngine.Forecast forecast,
+            String name,
             String[] fixedStates,
             String accessToken
     ) {
@@ -327,7 +419,7 @@ public final class MainActivity extends Activity {
                 combinations.add(recommendation.sequence());
             }
             new ApiRepository().saveTemplate(
-                    type, forecast.targetContest(), config, combinations, accessToken);
+                    type, forecast.targetContest(), name, config, combinations, accessToken);
         } catch (Exception ignored) {
             // el guardado de la plantilla no debe interrumpir el cálculo
         }
@@ -470,9 +562,10 @@ public final class MainActivity extends Activity {
         group.addView(option, new RadioGroup.LayoutParams(0, dp(46), 1));
     }
 
-    private void loadForecasts(boolean download) { loadForecasts(download, new EnumMap<>(DrawType.class)); }
+    private void loadForecasts(boolean download) { loadForecasts(download, new EnumMap<>(DrawType.class), null); }
 
-    private void loadForecasts(boolean download, Map<DrawType, String[]> favorites) {
+    private void loadForecasts(boolean download, Map<DrawType, String[]> favorites, String name) {
+        String personalName = name == null || name.isBlank() ? "Principal" : name.trim();
         DrawType[] types = activeTypes();
         setBusy(true, download ? "Descargando y validando históricos…" : "Preparando pronósticos…");
         executor.execute(() -> {
@@ -535,9 +628,9 @@ public final class MainActivity extends Activity {
                                 history, fixedStates == null ? new String[type.slots] : fixedStates,
                                 target, personalPackageSize);
                         personalForecasts.put(type, personal);
-                        databases.get(type).savePrediction(personal, "PERSONAL", true);
+                        databases.get(type).savePrediction(personal, "PERSONAL", true, personalName);
                         if (hasFavorites(fixedStates)) {
-                            savePersonalizedTemplate(type, personal, fixedStates, accessToken);
+                            savePersonalizedTemplate(type, personal, personalName, fixedStates, accessToken);
                         }
                     }
                     if (summary.length() > 0) summary.append("\\n");
@@ -681,14 +774,21 @@ public final class MainActivity extends Activity {
     ) {
         combinationsPager.removeAllViews();
         PredictionEngine.Forecast first = automaticForecasts.get(selectedType);
-        combinationMeta.setText(getString(R.string.combination_meta, first.targetContest()));
+        int target = first.targetContest();
+        currentTargetContest = target;
+        combinationMeta.setText(getString(R.string.combination_meta, target));
         Map<String, Map<DrawType, List<String>>> savedByGroup = new java.util.HashMap<>();
+        Map<String, Map<DrawType, String[]>> fixedByGroup = new java.util.HashMap<>();
         try {
             for (DrawType type : activeTypes()) {
                 for (DatabaseHelper.PredictionSnapshot snapshot : databases.get(type).getPredictionSnapshots()) {
-                    if (snapshot.contestNumber() == automaticForecasts.get(type).targetContest()) {
-                        savedByGroup.computeIfAbsent(snapshot.packageType(), ignored -> new EnumMap<>(DrawType.class))
+                    if (snapshot.contestNumber() == target) {
+                        String key = "AUTO".equals(snapshot.packageType())
+                                ? "AUTO" : (snapshot.name() == null ? "Principal" : snapshot.name());
+                        savedByGroup.computeIfAbsent(key, ignored -> new EnumMap<>(DrawType.class))
                                 .put(type, snapshot.sequences());
+                        fixedByGroup.computeIfAbsent(key, ignored -> new EnumMap<>(DrawType.class))
+                                .put(type, snapshot.fixedStates());
                     }
                 }
             }
@@ -696,19 +796,27 @@ public final class MainActivity extends Activity {
             showError("No se pudo leer el paquete guardado", error);
             return;
         }
-        if (savedByGroup.containsKey("PERSONAL") || !personalForecasts.isEmpty()) {
-            addComparisonPages(personalForecasts, automaticForecasts, savedByGroup);
+        List<String> names = new ArrayList<>(savedByGroup.keySet());
+        names.remove("AUTO");
+        java.util.Collections.sort(names);
+        if (names.isEmpty()) {
+            addPackagePages("Análisis automático", "AUTO", automaticForecasts, savedByGroup, fixedByGroup);
         } else {
-            addPackagePages("Análisis automático", "AUTO", automaticForecasts, savedByGroup);
+            if (selectedPersonalName == null || !names.contains(selectedPersonalName)) {
+                selectedPersonalName = names.get(0);
+            }
+            addComparisonPages(selectedPersonalName, automaticForecasts, savedByGroup, fixedByGroup);
         }
         combinationsPager.setDisplayedChild(0);
         updatePageIndicator();
+        refreshPersonalControls(target);
     }
 
     private void addComparisonPages(
-            Map<DrawType, PredictionEngine.Forecast> personalForecasts,
+            String personalName,
             Map<DrawType, PredictionEngine.Forecast> automaticForecasts,
-            Map<String, Map<DrawType, List<String>>> savedByGroup
+            Map<String, Map<DrawType, List<String>>> savedByGroup,
+            Map<String, Map<DrawType, String[]>> fixedByGroup
     ) {
         int pages = Math.max(personalPackageSize, automaticPackageSize);
         for (int index = 0; index < pages; index++) {
@@ -717,8 +825,8 @@ public final class MainActivity extends Activity {
             boolean hasPersonal = index < personalPackageSize;
             boolean hasAutomatic = index < automaticPackageSize;
             if (hasPersonal) {
-                addPackageSection(page, "Personalizado · favoritos", "PERSONAL", index,
-                        personalForecasts, savedByGroup);
+                addPackageSection(page, "Personalizado · " + personalName, personalName, index,
+                        automaticForecasts, savedByGroup, fixedByGroup);
             }
             if (hasPersonal && hasAutomatic) {
                 View separator = new View(this);
@@ -728,7 +836,7 @@ public final class MainActivity extends Activity {
             }
             if (hasAutomatic) {
                 addPackageSection(page, "Análisis automático", "AUTO", index,
-                        automaticForecasts, savedByGroup);
+                        automaticForecasts, savedByGroup, fixedByGroup);
             }
             combinationsPager.addView(page);
         }
@@ -738,31 +846,37 @@ public final class MainActivity extends Activity {
             String title,
             String packageType,
             Map<DrawType, PredictionEngine.Forecast> forecasts,
-            Map<String, Map<DrawType, List<String>>> savedByGroup
+            Map<String, Map<DrawType, List<String>>> savedByGroup,
+            Map<String, Map<DrawType, String[]>> fixedByGroup
     ) {
-        Map<DrawType, List<String>> saved = savedByGroup.get(packageType);
         for (int index = 0; index < automaticPackageSize; index++) {
             LinearLayout page = new LinearLayout(this);
             page.setOrientation(LinearLayout.VERTICAL);
-            addPackageSection(page, title, packageType, index, forecasts, savedByGroup);
+            addPackageSection(page, title, packageType, index, forecasts, savedByGroup, fixedByGroup);
             combinationsPager.addView(page);
         }
     }
 
     private void addPackageSection(
-            LinearLayout page, String title, String packageType, int index,
+            LinearLayout page, String title, String key, int index,
             Map<DrawType, PredictionEngine.Forecast> forecasts,
-            Map<String, Map<DrawType, List<String>>> savedByGroup
+            Map<String, Map<DrawType, List<String>>> savedByGroup,
+            Map<String, Map<DrawType, String[]>> fixedByGroup
     ) {
         TextView packageHeading = bodyText(title);
         packageHeading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         packageHeading.setTextColor(getColor(R.color.primary_dark));
         packageHeading.setPadding(0, dp(8), 0, dp(2));
         page.addView(packageHeading);
-        Map<DrawType, List<String>> saved = savedByGroup.get(packageType);
+        Map<DrawType, List<String>> saved = savedByGroup.get(key);
+        Map<DrawType, String[]> fixed = fixedByGroup.get(key);
         for (DrawType type : activeTypes()) {
-            String sequence = saved != null && saved.containsKey(type) ? saved.get(type).get(index)
-                    : forecasts.get(type).recommendations().get(index).sequence();
+            List<String> sequences = saved != null ? saved.get(type) : null;
+            String sequence = sequences != null && index < sequences.size()
+                    ? sequences.get(index)
+                    : (forecasts.get(type).recommendations().size() > index
+                    ? forecasts.get(type).recommendations().get(index).sequence() : null);
+            if (sequence == null) continue;
             int local = 0, draw = 0, away = 0;
             for (char state : sequence.toCharArray()) {
                 if (state == 'L') local++; else if (state == 'E') draw++; else away++;
@@ -773,8 +887,8 @@ public final class MainActivity extends Activity {
             heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             heading.setPadding(0, dp(12), 0, dp(8));
             page.addView(heading);
-            String[] fixedStates = "PERSONAL".equals(packageType) ? lastFavorites.get(type) : null;
-            page.addView(combinationPage(recommendation, type, forecasts.get(type).targetContest(), fixedStates));
+            String[] fixedStates = fixed != null ? fixed.get(type) : null;
+            page.addView(combinationPage(recommendation, type, currentTargetContest, fixedStates));
         }
     }
 

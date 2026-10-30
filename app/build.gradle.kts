@@ -13,8 +13,8 @@ android {
         applicationId = "mx.octomind.progol"
         minSdk = 26
         targetSdk = 36
-        versionCode = 49
-        versionName = "0.9.0"
+        versionCode = 50
+        versionName = "0.10.0"
 
         testInstrumentationRunner = "mx.octomind.progol.IntegrationInstrumentation"
     }

@@ -150,14 +150,14 @@ async function loadLeaderboard() {
     const data = await api('leaderboard');
     const rows = data.leaderboard || [];
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="4">Sin ranking todavía</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5">Sin ranking todavía</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map(r =>
-      `<tr><td><a href="#" class="users-link" onclick="viewUserTemplates('${r.userId}', '${r.email || ''}'); return false;">${r.email || r.userId}</a></td><td>${r.totalHits}</td><td>${r.contestsPlayed}</td><td>${r.averageHits}</td></tr>`
+      `<tr><td>${r.name || 'Principal'}</td><td><a href="#" class="users-link" onclick="viewUserTemplates('${r.userId}', '${r.email || ''}'); return false;">${r.email || r.userId}</a></td><td>${r.totalHits}</td><td>${r.contestsPlayed}</td><td>${r.averageHits}</td></tr>`
     ).join('');
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="4">${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5">${e.message}</td></tr>`;
   }
 }
 
