@@ -12,4 +12,5 @@
     <color name="result_error">#C53A3A</color>
     <color name="ic_launcher_background">#2E1065</color>
     <color name="fixed_yellow">#FFD54F</color>
+    <color name="marked_row">#D6E4FF</color>
 </resources>

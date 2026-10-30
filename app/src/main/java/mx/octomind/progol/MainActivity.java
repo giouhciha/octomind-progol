@@ -61,8 +61,10 @@ public final class MainActivity extends Activity {
     private static final long PUBLISH_POLL_INTERVAL_MS = 10_000;
     private DrawType selectedType = DrawType.MS;
     private Spinner drawSelector;
-    private Spinner packageSizeSpinner;
-    private int packageSize = 20;
+    private Spinner personalPackageSizeSpinner;
+    private Spinner automaticPackageSizeSpinner;
+    private int personalPackageSize = 20;
+    private int automaticPackageSize = 60;
     private final Map<DrawType, DatabaseHelper> databases = new EnumMap<>(DrawType.class);
     private final Set<DrawType> publishedTypes = new HashSet<>();
     private volatile Map<DrawType, PredictionEngine.Forecast> lastAutomatic = new EnumMap<>(DrawType.class);
@@ -152,14 +154,26 @@ public final class MainActivity extends Activity {
             }
         });
 
-        packageSizeSpinner = findViewById(R.id.packageSizeSpinner);
-        packageSizeSpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
-                new Integer[]{10, 20, 30, 40, 50, 60}));
-        packageSizeSpinner.setSelection(1); // 20 por defecto
-        packageSizeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        Integer[] packageSizes = {10, 20, 30, 40, 50, 60};
+        personalPackageSizeSpinner = findViewById(R.id.personalPackageSizeSpinner);
+        personalPackageSizeSpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                packageSizes));
+        personalPackageSizeSpinner.setSelection(1); // 20 por defecto
+        personalPackageSizeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onNothingSelected(AdapterView<?> parent) { }
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                packageSize = (Integer) parent.getItemAtPosition(position);
+                personalPackageSize = (Integer) parent.getItemAtPosition(position);
+            }
+        });
+
+        automaticPackageSizeSpinner = findViewById(R.id.automaticPackageSizeSpinner);
+        automaticPackageSizeSpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                packageSizes));
+        automaticPackageSizeSpinner.setSelection(5); // 60 por defecto
+        automaticPackageSizeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onNothingSelected(AdapterView<?> parent) { }
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                automaticPackageSize = (Integer) parent.getItemAtPosition(position);
             }
         });
 
@@ -284,7 +298,7 @@ public final class MainActivity extends Activity {
     }
 
     private int favoriteLimit(DrawType type) {
-        return type == DrawType.MS ? 2 : type == DrawType.WEEKEND ? 4 : 1;
+        return type == DrawType.MS ? 3 : type == DrawType.WEEKEND ? 4 : 1;
     }
 
     private static boolean hasFavorites(String[] fixedStates) {
@@ -508,7 +522,7 @@ public final class MainActivity extends Activity {
                     List<Contest> history = histories.get(type);
                     int target = publishedContestNumbers.getOrDefault(type, 0);
                     PredictionEngine.Forecast automatic = new PredictionEngine(type).analyze(
-                            history, new String[type.slots], target, packageSize);
+                            history, new String[type.slots], target, automaticPackageSize);
                     automaticForecasts.put(type, automatic);
                     if (download) {
                         downloadMatchNames(type, automatic.targetContest(), accessToken);
@@ -519,7 +533,7 @@ public final class MainActivity extends Activity {
                         String[] fixedStates = favorites.get(type);
                         PredictionEngine.Forecast personal = new PredictionEngine(type).analyze(
                                 history, fixedStates == null ? new String[type.slots] : fixedStates,
-                                target, packageSize);
+                                target, personalPackageSize);
                         personalForecasts.put(type, personal);
                         databases.get(type).savePrediction(personal, "PERSONAL", true);
                         if (hasFavorites(fixedStates)) {
@@ -696,17 +710,26 @@ public final class MainActivity extends Activity {
             Map<DrawType, PredictionEngine.Forecast> automaticForecasts,
             Map<String, Map<DrawType, List<String>>> savedByGroup
     ) {
-        for (int index = 0; index < packageSize; index++) {
+        int pages = Math.max(personalPackageSize, automaticPackageSize);
+        for (int index = 0; index < pages; index++) {
             LinearLayout page = new LinearLayout(this);
             page.setOrientation(LinearLayout.VERTICAL);
-            addPackageSection(page, "Personalizado · favoritos", "PERSONAL", index,
-                    personalForecasts, savedByGroup);
-            View separator = new View(this);
-            separator.setBackgroundColor(getColor(R.color.divider));
-            page.addView(separator, new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(2)));
-            addPackageSection(page, "Análisis automático", "AUTO", index,
-                    automaticForecasts, savedByGroup);
+            boolean hasPersonal = index < personalPackageSize;
+            boolean hasAutomatic = index < automaticPackageSize;
+            if (hasPersonal) {
+                addPackageSection(page, "Personalizado · favoritos", "PERSONAL", index,
+                        personalForecasts, savedByGroup);
+            }
+            if (hasPersonal && hasAutomatic) {
+                View separator = new View(this);
+                separator.setBackgroundColor(getColor(R.color.divider));
+                page.addView(separator, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dp(2)));
+            }
+            if (hasAutomatic) {
+                addPackageSection(page, "Análisis automático", "AUTO", index,
+                        automaticForecasts, savedByGroup);
+            }
             combinationsPager.addView(page);
         }
     }
@@ -718,7 +741,7 @@ public final class MainActivity extends Activity {
             Map<String, Map<DrawType, List<String>>> savedByGroup
     ) {
         Map<DrawType, List<String>> saved = savedByGroup.get(packageType);
-        for (int index = 0; index < packageSize; index++) {
+        for (int index = 0; index < automaticPackageSize; index++) {
             LinearLayout page = new LinearLayout(this);
             page.setOrientation(LinearLayout.VERTICAL);
             addPackageSection(page, title, packageType, index, forecasts, savedByGroup);

@@ -52,17 +52,40 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/package_size_label"
+                android:text="@string/personal_package_size_label"
                 android:textColor="@color/ink"
                 android:textSize="14sp" />
 
             <Spinner
-                android:id="@+id/packageSizeSpinner"
+                android:id="@+id/personalPackageSizeSpinner"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:layout_marginStart="12dp"
                 android:layout_weight="1"
-                android:contentDescription="@string/package_size_label" />
+                android:contentDescription="@string/personal_package_size_label" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/automatic_package_size_label"
+                android:textColor="@color/ink"
+                android:textSize="14sp" />
+
+            <Spinner
+                android:id="@+id/automaticPackageSizeSpinner"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:contentDescription="@string/automatic_package_size_label" />
         </LinearLayout>
 
         <LinearLayout

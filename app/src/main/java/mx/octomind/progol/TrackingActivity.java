@@ -2,6 +2,8 @@ package mx.octomind.progol;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -25,9 +27,11 @@ import org.json.JSONException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -336,7 +340,7 @@ public final class TrackingActivity extends Activity {
 
     private void renderComparison(int contestNumber) {
         comparisonList.removeAllViews();
-        comparisonList.addView(bodyText("Toca un pronóstico para ver los equipos."));
+        comparisonList.addView(bodyText("Toca para ver · mantén presionado para marcar. # ranking · P pronóstico · ✓ aciertos · ✗ fallidos"));
         boolean anyCompleted = false;
         for (DrawType type : types) {
             anyCompleted |= databases.get(type).getTrackedResults(contestNumber).completedCount() > 0;
@@ -394,13 +398,22 @@ public final class TrackingActivity extends Activity {
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(4), dp(6), dp(4), dp(6));
             int rank = position;
+            boolean marked = isMarked(snapshot.contestNumber(), snapshot.packageType(), comparison.originalRank());
+            row.setBackgroundColor(marked ? getColor(R.color.marked_row) : Color.TRANSPARENT);
             row.setOnClickListener(view -> showPredictionDetails(type, snapshot, comparison, results, rank));
+            row.setOnLongClickListener(view -> {
+                toggleMark(snapshot.contestNumber(), snapshot.packageType(), comparison.originalRank());
+                boolean nowMarked = isMarked(snapshot.contestNumber(), snapshot.packageType(), comparison.originalRank());
+                row.setBackgroundColor(nowMarked ? getColor(R.color.marked_row) : Color.TRANSPARENT);
+                return true;
+            });
 
-            TextView rankLabel = bodyText(Integer.toString(position));
+            TextView rankLabel = bodyText("#" + position + " · P" + comparison.originalRank());
             rankLabel.setGravity(Gravity.CENTER);
+            rankLabel.setTextSize(12);
             if (position == 1 && completed > 0) rankLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             rankLabel.setTextColor(getColor(R.color.muted));
-            row.addView(rankLabel, new LinearLayout.LayoutParams(dp(22), dp(40)));
+            row.addView(rankLabel, new LinearLayout.LayoutParams(dp(60), dp(40)));
 
             for (int slot = 0; slot < type.slots; slot++) {
                 char predicted = comparison.sequence().charAt(slot);
@@ -411,11 +424,12 @@ public final class TrackingActivity extends Activity {
                 row.addView(resultCell(String.valueOf(predicted), correct, hasResult), cellParams);
             }
 
-            TextView hits = bodyText(comparison.matches() + "/" + type.slots);
+            int misses = completed - comparison.matches();
+            TextView hits = bodyText(comparison.matches() + " ✓ " + misses + " ✗ (" + completed + ")");
             hits.setGravity(Gravity.CENTER);
             hits.setTextColor(getColor(R.color.muted));
             hits.setTextSize(12);
-            row.addView(hits, new LinearLayout.LayoutParams(dp(46), dp(40)));
+            row.addView(hits, new LinearLayout.LayoutParams(dp(84), dp(40)));
 
             comparisonList.addView(row);
             position++;
@@ -549,6 +563,34 @@ public final class TrackingActivity extends Activity {
             }
         }
         rendering = false;
+    }
+
+    private SharedPreferences markPrefs() {
+        return getSharedPreferences("octomind_tracking", Context.MODE_PRIVATE);
+    }
+
+    private String markKey(int contestNumber, String packageType, int originalRank) {
+        return contestNumber + ":" + packageType + ":" + originalRank;
+    }
+
+    private boolean isMarked(int contestNumber, String packageType, int originalRank) {
+        return markPrefs().getStringSet("marked", new HashSet<>())
+                .contains(markKey(contestNumber, packageType, originalRank));
+    }
+
+    private void toggleMark(int contestNumber, String packageType, int originalRank) {
+        Set<String> marked = new HashSet<>(markPrefs().getStringSet("marked", new HashSet<>()));
+        String key = markKey(contestNumber, packageType, originalRank);
+        boolean nowMarked;
+        if (marked.contains(key)) {
+            marked.remove(key);
+            nowMarked = false;
+        } else {
+            marked.add(key);
+            nowMarked = true;
+        }
+        markPrefs().edit().putStringSet("marked", marked).apply();
+        Toast.makeText(this, nowMarked ? "Pronóstico marcado" : "Pronóstico desmarcado", Toast.LENGTH_SHORT).show();
     }
 
     private TextView bodyText(String text) { TextView view = new TextView(this); view.setText(text); view.setTextColor(getColor(R.color.ink)); view.setTextSize(14); return view; }

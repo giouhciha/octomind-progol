@@ -3,6 +3,11 @@ __pycache__/
 .gradle/
 local.properties
 **/build/
+# Firma de release (NO subir a git)
+*.jks
+*.keystore
+keystore.properties
+upload_certificate.pem
 outputs/*.png
 outputs/*.xml
 .idea/

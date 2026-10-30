@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
 }
@@ -10,19 +13,33 @@ android {
         applicationId = "mx.octomind.progol"
         minSdk = 26
         targetSdk = 36
-        versionCode = 46
-        versionName = "0.8.2"
+        versionCode = 49
+        versionName = "0.9.0"
 
         testInstrumentationRunner = "mx.octomind.progol.IntegrationInstrumentation"
     }
 
+    signingConfigs {
+        create("release") {
+            val props = Properties().apply {
+                FileInputStream(rootProject.file("keystore.properties")).use { load(it) }
+            }
+            storeFile = rootProject.file(props.getProperty("storeFile"))
+            storePassword = props.getProperty("storePassword")
+            keyAlias = props.getProperty("keyAlias")
+            keyPassword = props.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

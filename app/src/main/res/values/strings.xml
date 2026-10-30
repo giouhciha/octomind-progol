@@ -25,6 +25,8 @@
     <string name="combinations_title">Paquete de combinaciones</string>
     <string name="refresh_matches">Refrescar partidos</string>
     <string name="package_size_label">Pronósticos</string>
+    <string name="personal_package_size_label">Personalizados</string>
+    <string name="automatic_package_size_label">Automáticos</string>
     <string name="previous_prediction">Anterior</string>
     <string name="next_prediction">Siguiente</string>
     <string name="swipe_hint">Desliza a la izquierda o derecha para cambiar</string>
