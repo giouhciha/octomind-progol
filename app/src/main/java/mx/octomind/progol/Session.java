@@ -9,6 +9,7 @@ public final class Session {
     private static final String KEY_ACCESS = "access_token";
     private static final String KEY_REFRESH = "refresh_token";
     private static final String KEY_BIOMETRIC = "biometric_enabled";
+    private static final String KEY_SELECTED_DRAW = "selected_draw";
 
     private Session() {}
 
@@ -50,6 +51,15 @@ public final class Session {
 
     public static void setBiometricEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_BIOMETRIC, enabled).apply();
+    }
+
+    /** Sorteo seleccionado persistido ("WEEKEND" o "MS"). */
+    public static String selectedDraw(Context context) {
+        return prefs(context).getString(KEY_SELECTED_DRAW, "MS");
+    }
+
+    public static void setSelectedDraw(Context context, String draw) {
+        prefs(context).edit().putString(KEY_SELECTED_DRAW, draw).apply();
     }
 
     public static void clear(Context context) {

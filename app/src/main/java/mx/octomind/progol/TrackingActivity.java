@@ -48,6 +48,7 @@ public final class TrackingActivity extends Activity {
     private LinearLayout comparisonList;
     private Button deletePersonalButton;
     private Button deleteAutomaticButton;
+    private Button unmarkAllButton;
     private int activeContest;
     private boolean rendering;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -64,8 +65,7 @@ public final class TrackingActivity extends Activity {
             visitorInputs.put(type, new ArrayList<>());
             resultLabels.put(type, new ArrayList<>());
         }
-        String draw = getIntent().getStringExtra("drawType");
-        DrawType primary = draw == null ? DrawType.MS : DrawType.valueOf(draw);
+        DrawType primary = "WEEKEND".equals(Session.selectedDraw(this)) ? DrawType.WEEKEND : DrawType.MS;
         types = primary == DrawType.MS
                 ? new ArrayList<>(List.of(DrawType.MS))
                 : new ArrayList<>(List.of(DrawType.WEEKEND, DrawType.REVANCHA));
@@ -82,6 +82,7 @@ public final class TrackingActivity extends Activity {
                         : List.of(DrawType.WEEKEND, DrawType.REVANCHA);
                 if (types.equals(next)) return;
                 types = new ArrayList<>(next);
+                Session.setSelectedDraw(TrackingActivity.this, types.get(0).name());
                 buildMatchRows();
                 fetchPublishedContest();
             }
@@ -95,6 +96,9 @@ public final class TrackingActivity extends Activity {
         deleteAutomaticButton = findViewById(R.id.deleteAutomaticButton);
         deletePersonalButton.setOnClickListener(view -> confirmDeletePackage("PERSONAL"));
         deleteAutomaticButton.setOnClickListener(view -> confirmDeletePackage("AUTO"));
+        unmarkAllButton = findViewById(R.id.unmarkAllButton);
+        unmarkAllButton.setOnClickListener(view -> unmarkAll());
+        updateUnmarkButton();
         buildMatchRows();
         contestSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -190,14 +194,15 @@ public final class TrackingActivity extends Activity {
             resultLabels.put(type, new ArrayList<>());
         }
         activeContest = 0;
+        int counter = 1;
         boolean multiple = types.size() > 1;
         for (DrawType type : types) {
             if (multiple) {
-                TextView heading = bodyText(type.label);
-                heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-                heading.setTextColor(getColor(R.color.primary_dark));
-                heading.setPadding(0, dp(10), 0, dp(4));
-                resultInputs.addView(heading);
+                TextView section = bodyText(type.label);
+                section.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                section.setTextColor(getColor(R.color.primary_dark));
+                section.setPadding(0, dp(14), 0, dp(4));
+                resultInputs.addView(section);
             }
             for (int slot = 0; slot < type.slots; slot++) {
                 LinearLayout match = new LinearLayout(this);
@@ -206,7 +211,7 @@ public final class TrackingActivity extends Activity {
                 match.setPadding(dp(7), dp(4), dp(7), dp(4));
                 match.setBackground(matchBackground());
 
-                TextView number = bodyText(Integer.toString(slot + 1));
+                TextView number = bodyText(Integer.toString(counter++));
                 number.setGravity(Gravity.CENTER); number.setTextColor(getColor(R.color.muted));
                 match.addView(number, new LinearLayout.LayoutParams(dp(30), dp(44)));
 
@@ -268,7 +273,7 @@ public final class TrackingActivity extends Activity {
         }
         String[] choices = {"Local  ·  L", "Empate  ·  E", "Visitante  ·  V", "Quitar resultado"};
         new AlertDialog.Builder(this)
-                .setTitle("Resultado · " + type.label + " · Partido " + (slot + 1))
+                .setTitle("Resultado · " + type.label + " · Partido " + globalSlotNumber(type, slot))
                 .setItems(choices, (dialog, position) -> {
                     String state = position == 0 ? "L" : position == 1 ? "E" : position == 2 ? "V" : null;
                     db.saveTrackedResult(activeContest, slot, state);
@@ -302,9 +307,22 @@ public final class TrackingActivity extends Activity {
             if (!"OFFICIAL".equals(tracked.source())) allOfficial = false;
         }
         rendering = false;
-        if (allOfficial) statusText.setText(getString(R.string.tracking_official_status, totalSlots));
-        else if (totalCompleted == 0) statusText.setText(R.string.tracking_no_results);
-        else statusText.setText(getString(R.string.tracking_partial_status, totalCompleted, totalSlots));
+        if (types.size() > 1) {
+            StringBuilder status = new StringBuilder();
+            for (DrawType type : types) {
+                int done = databases.get(type).getTrackedResults(activeContest).completedCount();
+                if (status.length() > 0) status.append("   ·   ");
+                status.append(type.label).append(": ").append(done).append("/").append(type.slots);
+            }
+            if (allOfficial) status.append("   ·   Validado");
+            statusText.setText(status.toString());
+        } else if (allOfficial) {
+            statusText.setText(getString(R.string.tracking_official_status, totalSlots));
+        } else if (totalCompleted == 0) {
+            statusText.setText(R.string.tracking_no_results);
+        } else {
+            statusText.setText(getString(R.string.tracking_partial_status, totalCompleted, totalSlots));
+        }
         renderComparison(contestNumber);
         updateDeleteButtons();
     }
@@ -340,6 +358,7 @@ public final class TrackingActivity extends Activity {
 
     private void renderComparison(int contestNumber) {
         comparisonList.removeAllViews();
+        updateUnmarkButton();
         comparisonList.addView(bodyText("Toca para ver · mantén presionado para marcar. # ranking · P pronóstico · ✓ aciertos · ✗ fallidos"));
         boolean anyCompleted = false;
         for (DrawType type : types) {
@@ -351,36 +370,23 @@ public final class TrackingActivity extends Activity {
             comparisonList.addView(pending);
         }
         boolean anyPackage = false;
-        for (DrawType type : types) {
-            List<DatabaseHelper.PredictionSnapshot> packages = new ArrayList<>();
-            for (DatabaseHelper.PredictionSnapshot candidate : snapshotsByType.get(type)) {
-                if (candidate.contestNumber() == contestNumber) packages.add(candidate);
-            }
-            if (packages.isEmpty()) continue;
+        List<MergedPackage> packages = mergedPackages(contestNumber);
+        if (packages.isEmpty()) {
+            TextView none = bodyText("Sin pronósticos guardados para este concurso.");
+            none.setTextColor(getColor(R.color.muted));
+            comparisonList.addView(none);
+            return;
+        }
+        for (MergedPackage pkg : packages) {
             anyPackage = true;
-            if (types.size() > 1) {
-                TextView typeHeading = bodyText(type.label);
-                typeHeading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-                typeHeading.setTextColor(getColor(R.color.primary_dark));
-                typeHeading.setPadding(0, dp(12), 0, dp(2));
-                comparisonList.addView(typeHeading);
-            }
-            DatabaseHelper.TrackedResults tracked = databases.get(type).getTrackedResults(contestNumber);
-            String[] results = tracked.results();
-            int completed = tracked.completedCount();
-            packages.sort(Comparator.comparing(DatabaseHelper.PredictionSnapshot::packageType).reversed());
-            for (DatabaseHelper.PredictionSnapshot packageSnapshot : packages) {
-                boolean isPersonal = "PERSONAL".equals(packageSnapshot.packageType());
-                String label = isPersonal
-                        ? "Personalizado · " + (packageSnapshot.name() == null ? "Principal" : packageSnapshot.name())
-                        : "Automático";
-                TextView heading = bodyText(label + " · " + packageSnapshot.sequences().size() + " pronósticos");
-                heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-                heading.setTextColor(getColor(R.color.primary_dark));
-                heading.setPadding(0, dp(12), 0, dp(2));
-                comparisonList.addView(heading);
-                addPackageComparison(type, packageSnapshot, results, completed);
-            }
+            String label = "PERSONAL".equals(pkg.packageType)
+                    ? "Personalizado · " + pkg.name : "Automático";
+            TextView heading = bodyText(label + " · " + pkg.sequences.size() + " pronósticos");
+            heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            heading.setTextColor(getColor(R.color.primary_dark));
+            heading.setPadding(0, dp(12), 0, dp(2));
+            comparisonList.addView(heading);
+            addMergedPackageComparison(pkg);
         }
         if (!anyPackage) {
             TextView none = bodyText("Sin pronósticos guardados para este concurso.");
@@ -389,54 +395,69 @@ public final class TrackingActivity extends Activity {
         }
     }
 
-    private void addPackageComparison(
-            DrawType type, DatabaseHelper.PredictionSnapshot snapshot, String[] results, int completed
-    ) {
-        List<PredictionComparison.RankedPrediction> comparisons = PredictionComparison.rank(snapshot.sequences(), results);
+    private void addMergedPackageComparison(MergedPackage pkg) {
+        List<PredictionComparison.RankedPrediction> comparisons = PredictionComparison.rank(pkg.sequences, pkg.results);
         int position = 1;
         for (PredictionComparison.RankedPrediction comparison : comparisons) {
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(dp(4), dp(6), dp(4), dp(6));
+            LinearLayout block = new LinearLayout(this);
+            block.setOrientation(LinearLayout.VERTICAL);
+            block.setPadding(dp(4), dp(6), dp(4), dp(6));
             int rank = position;
-            String packageKey = "PERSONAL".equals(snapshot.packageType())
-                    ? "PERSONAL:" + (snapshot.name() == null ? "Principal" : snapshot.name())
-                    : "AUTO";
-            boolean marked = isMarked(snapshot.contestNumber(), packageKey, comparison.originalRank());
-            row.setBackgroundColor(marked ? getColor(R.color.marked_row) : Color.TRANSPARENT);
-            row.setOnClickListener(view -> showPredictionDetails(type, snapshot, comparison, results, rank));
-            row.setOnLongClickListener(view -> {
-                toggleMark(snapshot.contestNumber(), packageKey, comparison.originalRank());
-                boolean nowMarked = isMarked(snapshot.contestNumber(), packageKey, comparison.originalRank());
-                row.setBackgroundColor(nowMarked ? getColor(R.color.marked_row) : Color.TRANSPARENT);
+            boolean marked = isMarked(activeContest, pkg.packageKey, comparison.originalRank());
+            block.setBackgroundColor(marked ? getColor(R.color.marked_row) : Color.TRANSPARENT);
+            block.setOnClickListener(view -> showMergedDetails(pkg, comparison, rank));
+            block.setOnLongClickListener(view -> {
+                toggleMark(activeContest, pkg.packageKey, comparison.originalRank());
+                boolean nowMarked = isMarked(activeContest, pkg.packageKey, comparison.originalRank());
+                block.setBackgroundColor(nowMarked ? getColor(R.color.marked_row) : Color.TRANSPARENT);
                 return true;
             });
 
-            TextView rankLabel = bodyText("#" + position + " · P" + comparison.originalRank());
-            rankLabel.setGravity(Gravity.CENTER);
-            rankLabel.setTextSize(12);
-            if (position == 1 && completed > 0) rankLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            rankLabel.setTextColor(getColor(R.color.muted));
-            row.addView(rankLabel, new LinearLayout.LayoutParams(dp(60), dp(40)));
+            int[][] stats = perTypeStats(comparison, pkg);
 
-            for (int slot = 0; slot < type.slots; slot++) {
-                char predicted = comparison.sequence().charAt(slot);
-                boolean hasResult = slot < results.length && results[slot] != null;
-                boolean correct = hasResult && results[slot].charAt(0) == predicted;
-                LinearLayout.LayoutParams cellParams = new LinearLayout.LayoutParams(0, dp(34), 1);
-                cellParams.setMargins(dp(2), 0, dp(2), 0);
-                row.addView(resultCell(String.valueOf(predicted), correct, hasResult), cellParams);
+            StringBuilder summaryText = new StringBuilder();
+            summaryText.append("#").append(position).append(" · P").append(comparison.originalRank());
+            for (int t = 0; t < types.size(); t++) {
+                summaryText.append("  ·  ")
+                        .append(stats[t][0]).append(" ✓ ").append(stats[t][1])
+                        .append(" ✗ (").append(types.get(t).slots).append(")");
+            }
+            LinearLayout summary = new LinearLayout(this);
+            summary.setOrientation(LinearLayout.HORIZONTAL);
+            summary.setGravity(Gravity.CENTER_VERTICAL);
+            TextView summaryLabel = bodyText(summaryText.toString());
+            summaryLabel.setTextSize(12);
+            summaryLabel.setTextColor(getColor(R.color.muted));
+            if (position == 1 && pkg.completed > 0) summaryLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            summary.addView(summaryLabel, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            block.addView(summary);
+
+            int offset = 0;
+            for (int t = 0; t < types.size(); t++) {
+                DrawType type = types.get(t);
+                LinearLayout line = new LinearLayout(this);
+                line.setOrientation(LinearLayout.HORIZONTAL);
+                line.setGravity(Gravity.CENTER_VERTICAL);
+                TextView label = bodyText(shortLabel(type));
+                label.setTextSize(11);
+                label.setTextColor(getColor(R.color.muted));
+                label.setGravity(Gravity.CENTER_VERTICAL);
+                line.addView(label, new LinearLayout.LayoutParams(dp(56), dp(34)));
+                for (int slot = 0; slot < type.slots; slot++) {
+                    int combined = offset + slot;
+                    char predicted = comparison.sequence().charAt(combined);
+                    boolean hasResult = combined < pkg.results.length && pkg.results[combined] != null;
+                    boolean correct = hasResult && pkg.results[combined].charAt(0) == predicted;
+                    LinearLayout.LayoutParams cellParams = new LinearLayout.LayoutParams(0, dp(34), 1);
+                    cellParams.setMargins(dp(2), 0, dp(2), 0);
+                    line.addView(resultCell(String.valueOf(predicted), correct, hasResult), cellParams);
+                }
+                block.addView(line);
+                offset += type.slots;
             }
 
-            int misses = completed - comparison.matches();
-            TextView hits = bodyText(comparison.matches() + " ✓ " + misses + " ✗ (" + completed + ")");
-            hits.setGravity(Gravity.CENTER);
-            hits.setTextColor(getColor(R.color.muted));
-            hits.setTextSize(12);
-            row.addView(hits, new LinearLayout.LayoutParams(dp(84), dp(40)));
-
-            comparisonList.addView(row);
+            comparisonList.addView(block);
             position++;
         }
     }
@@ -464,22 +485,27 @@ public final class TrackingActivity extends Activity {
         return cell;
     }
 
-    private void showPredictionDetails(DrawType type, DatabaseHelper.PredictionSnapshot snapshot, PredictionComparison.RankedPrediction comparison, String[] results, int rank) {
-        List<DatabaseHelper.TeamNames> names = databases.get(type).getMatchNames(snapshot.contestNumber());
-        boolean isPersonal = "PERSONAL".equals(snapshot.packageType());
-        String[] fixedStates = snapshot.fixedStates();
+    private void showMergedDetails(MergedPackage pkg, PredictionComparison.RankedPrediction comparison, int rank) {
+        boolean isPersonal = "PERSONAL".equals(pkg.packageType);
 
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(6), 0, dp(6), 0);
 
-        TextView hits = bodyText(comparison.matches() + "/" + type.slots + " aciertos");
-        hits.setGravity(Gravity.CENTER);
-        hits.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        hits.setPadding(0, dp(4), 0, dp(4));
-        content.addView(hits);
+        int[][] stats = perTypeStats(comparison, pkg);
 
-        for (int slot = 0; slot < type.slots; slot++) {
+        DrawType previousType = null;
+        for (int slot = 0; slot < pkg.totalSlots; slot++) {
+            DrawType currentType = typeAtGlobalSlot(slot);
+            if (currentType != previousType) {
+                int idx = types.indexOf(currentType);
+                TextView section = bodyText(currentType.label + " · " + stats[idx][0] + "/" + currentType.slots + " aciertos");
+                section.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                section.setTextColor(getColor(R.color.primary_dark));
+                section.setPadding(0, dp(10), 0, dp(2));
+                content.addView(section);
+                previousType = currentType;
+            }
             LinearLayout row = new LinearLayout(this);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setOrientation(LinearLayout.HORIZONTAL);
@@ -491,9 +517,8 @@ public final class TrackingActivity extends Activity {
             number.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             row.addView(number, new LinearLayout.LayoutParams(dp(30), dp(44)));
 
-            DatabaseHelper.TeamNames teams = names.get(slot);
-            String teamLabel = teams.local().isBlank() && teams.visitor().isBlank()
-                    ? "Partido " + (slot + 1) : teams.local() + " vs " + teams.visitor();
+            String teamLabel = slot < pkg.teamNames.size() && !pkg.teamNames.get(slot).isEmpty()
+                    ? pkg.teamNames.get(slot) : "Partido " + (slot + 1);
             TextView teamView = bodyText(teamLabel);
             teamView.setTextSize(12);
             teamView.setTextColor(getColor(R.color.muted));
@@ -502,9 +527,9 @@ public final class TrackingActivity extends Activity {
             row.addView(teamView, new LinearLayout.LayoutParams(0, dp(44), 1.5f));
 
             char predicted = comparison.sequence().charAt(slot);
-            boolean hasResult = slot < results.length && results[slot] != null;
-            boolean correct = hasResult && results[slot].charAt(0) == predicted;
-            boolean fixed = isPersonal && fixedStates != null && slot < fixedStates.length && fixedStates[slot] != null;
+            boolean hasResult = slot < pkg.results.length && pkg.results[slot] != null;
+            boolean correct = hasResult && pkg.results[slot].charAt(0) == predicted;
+            boolean fixed = isPersonal && pkg.fixedStates != null && slot < pkg.fixedStates.length && pkg.fixedStates[slot] != null;
 
             addDetailCell(row, "L", predicted == 'L', fixed, hasResult, correct);
             addDetailCell(row, "E", predicted == 'E', fixed, hasResult, correct);
@@ -516,7 +541,7 @@ public final class TrackingActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(content);
-        new AlertDialog.Builder(this).setTitle("Concurso " + snapshot.contestNumber() + " · Posición " + rank)
+        new AlertDialog.Builder(this).setTitle("Concurso " + activeContest + " · Posición " + rank)
                 .setView(scroll).setPositiveButton("Cerrar", null).show();
     }
 
@@ -596,6 +621,156 @@ public final class TrackingActivity extends Activity {
         }
         markPrefs().edit().putStringSet("marked", marked).apply();
         Toast.makeText(this, nowMarked ? "Pronóstico marcado" : "Pronóstico desmarcado", Toast.LENGTH_SHORT).show();
+        updateUnmarkButton();
+    }
+
+    private void unmarkAll() {
+        markPrefs().edit().remove("marked").apply();
+        updateUnmarkButton();
+        if (activeContest != 0) renderComparison(activeContest);
+        Toast.makeText(this, "Todos los pronósticos desmarcados", Toast.LENGTH_SHORT).show();
+    }
+
+    private boolean hasAnyMarks() {
+        return !markPrefs().getStringSet("marked", new HashSet<>()).isEmpty();
+    }
+
+    private void updateUnmarkButton() {
+        unmarkAllButton.setEnabled(hasAnyMarks());
+    }
+
+    private String shortLabel(DrawType type) {
+        return type == DrawType.WEEKEND ? "Fin Sem" : type.label;
+    }
+
+    private String packageKeyOf(DatabaseHelper.PredictionSnapshot snapshot) {
+        return "PERSONAL".equals(snapshot.packageType())
+                ? "PERSONAL:" + (snapshot.name() == null ? "Principal" : snapshot.name())
+                : "AUTO";
+    }
+
+    private int globalSlotNumber(DrawType type, int slot) {
+        int base = 1;
+        for (DrawType t : types) {
+            if (t == type) return base + slot;
+            base += t.slots;
+        }
+        return slot + 1;
+    }
+
+    private DrawType typeAtGlobalSlot(int globalSlot) {
+        int offset = 0;
+        for (DrawType type : types) {
+            if (globalSlot < offset + type.slots) return type;
+            offset += type.slots;
+        }
+        return types.get(types.size() - 1);
+    }
+
+    private int[][] perTypeStats(PredictionComparison.RankedPrediction comparison, MergedPackage pkg) {
+        int[][] stats = new int[types.size()][2]; // [aciertos, fallas]
+        int offset = 0;
+        for (int t = 0; t < types.size(); t++) {
+            int hits = 0, completed = 0;
+            for (int slot = 0; slot < types.get(t).slots; slot++) {
+                int combined = offset + slot;
+                String r = combined < pkg.results.length ? pkg.results[combined] : null;
+                if (r != null) {
+                    completed++;
+                    if (r.charAt(0) == comparison.sequence().charAt(combined)) hits++;
+                }
+            }
+            stats[t][0] = hits;
+            stats[t][1] = completed - hits;
+            offset += types.get(t).slots;
+        }
+        return stats;
+    }
+
+    private List<MergedPackage> mergedPackages(int contestNumber) {
+        Map<String, Map<DrawType, DatabaseHelper.PredictionSnapshot>> grouped = new LinkedHashMap<>();
+        for (DrawType type : types) {
+            for (DatabaseHelper.PredictionSnapshot snapshot : snapshotsByType.get(type)) {
+                if (snapshot.contestNumber() == contestNumber) {
+                    grouped.computeIfAbsent(packageKeyOf(snapshot), k -> new EnumMap<>(DrawType.class))
+                            .put(type, snapshot);
+                }
+            }
+        }
+        List<MergedPackage> merged = new ArrayList<>();
+        for (Map.Entry<String, Map<DrawType, DatabaseHelper.PredictionSnapshot>> entry : grouped.entrySet()) {
+            Map<DrawType, DatabaseHelper.PredictionSnapshot> byType = entry.getValue();
+            if (byType.size() != types.size()) continue;
+            merged.add(mergePackage(entry.getKey(), byType, contestNumber));
+        }
+        merged.sort(Comparator
+                .comparing((MergedPackage p) -> "PERSONAL".equals(p.packageType) ? 0 : 1)
+                .thenComparing(p -> p.name == null ? "" : p.name));
+        return merged;
+    }
+
+    private MergedPackage mergePackage(String key, Map<DrawType, DatabaseHelper.PredictionSnapshot> byType, int contestNumber) {
+        DatabaseHelper.PredictionSnapshot first = byType.values().iterator().next();
+        String packageType = first.packageType();
+        String name = "PERSONAL".equals(packageType)
+                ? (first.name() == null ? "Principal" : first.name()) : null;
+
+        int count = first.sequences().size();
+        List<String> combined = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            StringBuilder sb = new StringBuilder();
+            for (DrawType type : types) sb.append(byType.get(type).sequences().get(i));
+            combined.add(sb.toString());
+        }
+
+        List<String> resultList = new ArrayList<>();
+        List<String> fixedList = new ArrayList<>();
+        List<String> teamList = new ArrayList<>();
+        int completed = 0, totalSlots = 0;
+        for (DrawType type : types) {
+            String[] results = databases.get(type).getTrackedResults(contestNumber).results();
+            List<DatabaseHelper.TeamNames> names = databases.get(type).getMatchNames(contestNumber);
+            String[] fixed = "PERSONAL".equals(packageType) ? byType.get(type).fixedStates() : null;
+            for (int slot = 0; slot < type.slots; slot++) {
+                String r = slot < results.length ? results[slot] : null;
+                resultList.add(r);
+                if (r != null) completed++;
+                fixedList.add(fixed != null && slot < fixed.length ? fixed[slot] : null);
+                DatabaseHelper.TeamNames tn = slot < names.size() ? names.get(slot)
+                        : new DatabaseHelper.TeamNames("", "");
+                teamList.add(tn.local().isBlank() && tn.visitor().isBlank()
+                        ? "" : tn.local() + " vs " + tn.visitor());
+            }
+            totalSlots += type.slots;
+        }
+        return new MergedPackage(key, packageType, name, combined,
+                resultList.toArray(new String[0]), fixedList.toArray(new String[0]),
+                teamList, completed, totalSlots);
+    }
+
+    private static final class MergedPackage {
+        final String packageKey;
+        final String packageType;
+        final String name;
+        final List<String> sequences;
+        final String[] results;
+        final String[] fixedStates;
+        final List<String> teamNames;
+        final int completed;
+        final int totalSlots;
+        MergedPackage(String packageKey, String packageType, String name, List<String> sequences,
+                      String[] results, String[] fixedStates, List<String> teamNames,
+                      int completed, int totalSlots) {
+            this.packageKey = packageKey;
+            this.packageType = packageType;
+            this.name = name;
+            this.sequences = sequences;
+            this.results = results;
+            this.fixedStates = fixedStates;
+            this.teamNames = teamNames;
+            this.completed = completed;
+            this.totalSlots = totalSlots;
+        }
     }
 
     private TextView bodyText(String text) { TextView view = new TextView(this); view.setText(text); view.setTextColor(getColor(R.color.ink)); view.setTextSize(14); return view; }

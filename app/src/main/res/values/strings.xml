@@ -14,7 +14,8 @@
     <string name="tracking_subtitle">Captura los resultados conforme terminan los partidos. Puedes dejar casillas pendientes.</string>
     <string name="tracking_contest">Concurso</string>
     <string name="tracking_results">Resultados reales</string>
-    <string name="tracking_comparison">Comparación de los 20 pronósticos</string>
+    <string name="tracking_comparison">Comparación de pronósticos</string>
+    <string name="unmark_all">Desmarcar todos</string>
     <string name="tracking_empty">Todavía no hay pronósticos guardados.</string>
     <string name="tracking_read_error">No se pudieron leer los pronósticos guardados.</string>
     <string name="tracking_invalid">Pronóstico guardado no válido</string>

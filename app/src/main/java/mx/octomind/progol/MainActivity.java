@@ -122,6 +122,7 @@ public final class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         for (DrawType type : DrawType.values()) databases.put(type, new DatabaseHelper(this, type));
+        selectedType = "WEEKEND".equals(Session.selectedDraw(this)) ? DrawType.WEEKEND : DrawType.MS;
         database = databases.get(selectedType);
         statusText = findViewById(R.id.statusText);
         probabilityTable = findViewById(R.id.probabilityTable);
@@ -167,10 +168,12 @@ public final class MainActivity extends Activity {
         drawSelector = findViewById(R.id.drawSelector);
         drawSelector.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
                 new String[]{"Mitad de Semana", "Fin de Semana + Revancha"}));
+        drawSelector.setSelection(selectedType == DrawType.MS ? 0 : 1);
         drawSelector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onNothingSelected(AdapterView<?> parent) { }
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 selectedType = position == 0 ? DrawType.MS : DrawType.WEEKEND;
+                Session.setSelectedDraw(MainActivity.this, selectedType.name());
                 database = databases.get(selectedType);
                 clearResults();
                 checkPublishedStatus();
@@ -321,7 +324,7 @@ public final class MainActivity extends Activity {
     }
 
     private int favoriteLimit(DrawType type) {
-        return type == DrawType.MS ? 3 : type == DrawType.WEEKEND ? 4 : 1;
+        return type == DrawType.MS ? 3 : type == DrawType.WEEKEND ? 4 : 2;
     }
 
     private void requestNewPersonal() {
