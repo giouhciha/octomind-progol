@@ -134,7 +134,7 @@ Resources:
   LeaderboardTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: OctomindLeaderboard
+      TableName: OctomindLeaderboardV2
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: pk

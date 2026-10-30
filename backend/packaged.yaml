@@ -131,17 +131,17 @@ Resources:
   LeaderboardTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: OctomindLeaderboard
+      TableName: OctomindLeaderboardV2
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
       - AttributeName: pk
         AttributeType: S
-      - AttributeName: userId
+      - AttributeName: entryId
         AttributeType: S
       KeySchema:
       - AttributeName: pk
         KeyType: HASH
-      - AttributeName: userId
+      - AttributeName: entryId
         KeyType: RANGE
   HistoryTable:
     Type: AWS::DynamoDB::Table
@@ -191,7 +191,7 @@ Resources:
     Properties:
       FunctionName: OctomindApi
       Handler: app.lambda_handler
-      CodeUri: s3://octomind-backend-artifacts-743281284535/e91f6ddeef9982fb4a5fe6b50657841b
+      CodeUri: s3://octomind-backend-artifacts-743281284535/1efed5981e34a6ca629ec33fb2599fd4
       Environment:
         Variables:
           CONTESTS_TABLE:
