@@ -13,8 +13,8 @@ android {
         applicationId = "mx.octomind.progol"
         minSdk = 26
         targetSdk = 36
-        versionCode = 57
-        versionName = "0.10.7"
+        versionCode = 63
+        versionName = "0.11.3"
 
         testInstrumentationRunner = "mx.octomind.progol.IntegrationInstrumentation"
     }
@@ -64,6 +64,17 @@ val copyVersionedDebugApk = tasks.register<Copy>("copyVersionedDebugApk") {
 
 tasks.matching { it.name == "assembleDebug" }.configureEach {
     finalizedBy(copyVersionedDebugApk)
+}
+
+val copyVersionedReleaseAab = tasks.register<Copy>("copyVersionedReleaseAab") {
+    dependsOn("bundleRelease")
+    from(layout.buildDirectory.file("outputs/bundle/release/app-release.aab"))
+    into(layout.buildDirectory.dir("outputs/bundle/versioned"))
+    rename { "release-${android.defaultConfig.versionName}.aab" }
+}
+
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    finalizedBy(copyVersionedReleaseAab)
 }
 
 dependencies {

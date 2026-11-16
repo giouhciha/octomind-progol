@@ -200,7 +200,20 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void savePrediction(PredictionEngine.Forecast forecast, String packageType, boolean replaceExisting, String name) {
-        if (!"AUTO".equals(packageType) && !"PERSONAL".equals(packageType))
+        savePredictionRaw(forecast.sourceContest(), forecast.targetContest(),
+                forecast.modelVersion(), forecast.toJson().toString(),
+                packageType, replaceExisting, name);
+    }
+
+    private static boolean isValidPackageType(String packageType) {
+        return "AUTO".equals(packageType) || "PERSONAL".equals(packageType);
+    }
+
+    private void savePredictionRaw(
+            int sourceContest, int targetContest, String modelVersion, String payload,
+            String packageType, boolean replaceExisting, String name
+    ) {
+        if (!isValidPackageType(packageType))
             throw new IllegalArgumentException("Tipo de paquete inválido");
         boolean personal = "PERSONAL".equals(packageType);
         String effectiveName = personal && name != null && !name.isBlank() ? name.trim() : null;
@@ -208,10 +221,10 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
         String[] args;
         if (personal) {
             selection = "target_contest = ? AND package_type = ? AND name = ?";
-            args = new String[]{Integer.toString(forecast.targetContest()), packageType, effectiveName};
+            args = new String[]{Integer.toString(targetContest), packageType, effectiveName};
         } else {
             selection = "target_contest = ? AND package_type = ? AND name IS NULL";
-            args = new String[]{Integer.toString(forecast.targetContest()), packageType};
+            args = new String[]{Integer.toString(targetContest), packageType};
         }
         try (Cursor cursor = getReadableDatabase().query("prediction_runs", new String[]{"id"},
                 selection, args, null, null, null)) {
@@ -220,17 +233,17 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
         if (replaceExisting) getWritableDatabase().delete("prediction_runs", selection, args);
         ContentValues values = new ContentValues();
         values.put("created_at", Instant.now().toString());
-        values.put("source_contest", forecast.sourceContest());
-        values.put("target_contest", forecast.targetContest());
+        values.put("source_contest", sourceContest);
+        values.put("target_contest", targetContest);
         values.put("package_type", packageType);
         if (effectiveName == null) values.putNull("name"); else values.put("name", effectiveName);
-        values.put("model_version", forecast.modelVersion());
-        values.put("payload", forecast.toJson().toString());
+        values.put("model_version", modelVersion);
+        values.put("payload", payload);
         getWritableDatabase().insertOrThrow("prediction_runs", null, values);
     }
 
     public void deletePredictionPackage(int contestNumber, String packageType) {
-        if (!"AUTO".equals(packageType) && !"PERSONAL".equals(packageType))
+        if (!isValidPackageType(packageType))
             throw new IllegalArgumentException("Tipo de paquete inválido");
         getWritableDatabase().delete("prediction_runs",
                 "target_contest = ? AND package_type = ?",
@@ -245,6 +258,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
             while (cursor.moveToNext()) {
                 int target = cursor.getInt(cursor.getColumnIndexOrThrow("target_contest"));
                 String packageType = cursor.getString(cursor.getColumnIndexOrThrow("package_type"));
+                if ("AUTO_V2".equals(packageType)) continue; // motor v2 retirado
                 int nameColumn = cursor.getColumnIndexOrThrow("name");
                 String name = cursor.isNull(nameColumn) ? null : cursor.getString(nameColumn);
                 String key = target + ":" + packageType + ":" + name;
@@ -502,7 +516,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 values.put("source_contest", item.getInt("sourceContest"));
                 values.put("target_contest", item.getInt("targetContest"));
                 String packageType = item.optString("packageType", "AUTO");
-                if (!"AUTO".equals(packageType) && !"PERSONAL".equals(packageType)) throw new JSONException("Tipo de paquete inválido");
+                if (!isValidPackageType(packageType)) throw new JSONException("Tipo de paquete inválido");
                 values.put("package_type", packageType);
                 if (item.has("name")) values.put("name", item.getString("name"));
                 values.put("model_version", item.getString("modelVersion"));

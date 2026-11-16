@@ -623,7 +623,6 @@ public final class MainActivity extends Activity {
                     if (download) {
                         downloadMatchNames(type, automatic.targetContest(), accessToken);
                     }
-                    // Refresh AUTO when the user explicitly requests a side-by-side test.
                     databases.get(type).savePrediction(automatic, "AUTO", createPersonalPackage);
                     if (createPersonalPackage) {
                         String[] fixedStates = favorites.get(type);
@@ -787,7 +786,8 @@ public final class MainActivity extends Activity {
                 for (DatabaseHelper.PredictionSnapshot snapshot : databases.get(type).getPredictionSnapshots()) {
                     if (snapshot.contestNumber() == target) {
                         String key = "AUTO".equals(snapshot.packageType())
-                                ? "AUTO" : (snapshot.name() == null ? "Principal" : snapshot.name());
+                                ? "AUTO"
+                                : (snapshot.name() == null ? "Principal" : snapshot.name());
                         savedByGroup.computeIfAbsent(key, ignored -> new EnumMap<>(DrawType.class))
                                 .put(type, snapshot.sequences());
                         fixedByGroup.computeIfAbsent(key, ignored -> new EnumMap<>(DrawType.class))
@@ -803,7 +803,7 @@ public final class MainActivity extends Activity {
         names.remove("AUTO");
         java.util.Collections.sort(names);
         if (names.isEmpty()) {
-            addPackagePages("Análisis automático", "AUTO", automaticForecasts, savedByGroup, fixedByGroup);
+            addPackagePages(automaticForecasts, savedByGroup, fixedByGroup);
         } else {
             if (selectedPersonalName == null || !names.contains(selectedPersonalName)) {
                 selectedPersonalName = names.get(0);
@@ -832,10 +832,7 @@ public final class MainActivity extends Activity {
                         automaticForecasts, savedByGroup, fixedByGroup);
             }
             if (hasPersonal && hasAutomatic) {
-                View separator = new View(this);
-                separator.setBackgroundColor(getColor(R.color.divider));
-                page.addView(separator, new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, dp(2)));
+                addSeparator(page);
             }
             if (hasAutomatic) {
                 addPackageSection(page, "Análisis automático", "AUTO", index,
@@ -846,8 +843,6 @@ public final class MainActivity extends Activity {
     }
 
     private void addPackagePages(
-            String title,
-            String packageType,
             Map<DrawType, PredictionEngine.Forecast> forecasts,
             Map<String, Map<DrawType, List<String>>> savedByGroup,
             Map<String, Map<DrawType, String[]>> fixedByGroup
@@ -855,9 +850,17 @@ public final class MainActivity extends Activity {
         for (int index = 0; index < automaticPackageSize; index++) {
             LinearLayout page = new LinearLayout(this);
             page.setOrientation(LinearLayout.VERTICAL);
-            addPackageSection(page, title, packageType, index, forecasts, savedByGroup, fixedByGroup);
+            addPackageSection(page, "Análisis automático", "AUTO", index,
+                    forecasts, savedByGroup, fixedByGroup);
             combinationsPager.addView(page);
         }
+    }
+
+    private void addSeparator(LinearLayout page) {
+        View separator = new View(this);
+        separator.setBackgroundColor(getColor(R.color.divider));
+        page.addView(separator, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(2)));
     }
 
     private void addPackageSection(

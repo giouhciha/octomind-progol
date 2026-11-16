@@ -49,6 +49,8 @@ public final class TrackingActivity extends Activity {
     private Button deletePersonalButton;
     private Button deleteAutomaticButton;
     private Button unmarkAllButton;
+    private Spinner sortFilterSpinner;
+    private DrawType sortFilter = null;
     private int activeContest;
     private boolean rendering;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -99,6 +101,19 @@ public final class TrackingActivity extends Activity {
         unmarkAllButton = findViewById(R.id.unmarkAllButton);
         unmarkAllButton.setOnClickListener(view -> unmarkAll());
         updateUnmarkButton();
+        sortFilterSpinner = findViewById(R.id.sortFilterSpinner);
+        sortFilterSpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"Todos", "Fin de Semana", "Revancha"}));
+        sortFilterSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onNothingSelected(AdapterView<?> parent) { }
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                DrawType next = position == 0 ? null
+                        : position == 1 ? DrawType.WEEKEND : DrawType.REVANCHA;
+                if (next == sortFilter) return;
+                sortFilter = next;
+                if (activeContest != 0) renderComparison(activeContest);
+            }
+        });
         buildMatchRows();
         contestSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -196,6 +211,11 @@ public final class TrackingActivity extends Activity {
         activeContest = 0;
         int counter = 1;
         boolean multiple = types.size() > 1;
+        sortFilterSpinner.setVisibility(multiple ? View.VISIBLE : View.GONE);
+        if (!multiple) {
+            sortFilter = null;
+            sortFilterSpinner.setSelection(0);
+        }
         for (DrawType type : types) {
             if (multiple) {
                 TextView section = bodyText(type.label);
@@ -379,8 +399,12 @@ public final class TrackingActivity extends Activity {
         }
         for (MergedPackage pkg : packages) {
             anyPackage = true;
-            String label = "PERSONAL".equals(pkg.packageType)
-                    ? "Personalizado · " + pkg.name : "Automático";
+            String label;
+            if ("PERSONAL".equals(pkg.packageType)) {
+                label = "Personalizado · " + pkg.name;
+            } else {
+                label = "Automático";
+            }
             TextView heading = bodyText(label + " · " + pkg.sequences.size() + " pronósticos");
             heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             heading.setTextColor(getColor(R.color.primary_dark));
@@ -396,7 +420,9 @@ public final class TrackingActivity extends Activity {
     }
 
     private void addMergedPackageComparison(MergedPackage pkg) {
-        List<PredictionComparison.RankedPrediction> comparisons = PredictionComparison.rank(pkg.sequences, pkg.results);
+        List<DrawType> activeTypes = sortFilter == null ? types : List.of(sortFilter);
+        List<PredictionComparison.RankedPrediction> comparisons = rankFiltered(pkg, sortFilter);
+        int personalColor = "PERSONAL".equals(pkg.packageType) ? personalColor(pkg.name) : 0;
         int position = 1;
         for (PredictionComparison.RankedPrediction comparison : comparisons) {
             LinearLayout block = new LinearLayout(this);
@@ -404,38 +430,42 @@ public final class TrackingActivity extends Activity {
             block.setPadding(dp(4), dp(6), dp(4), dp(6));
             int rank = position;
             boolean marked = isMarked(activeContest, pkg.packageKey, comparison.originalRank());
-            block.setBackgroundColor(marked ? getColor(R.color.marked_row) : Color.TRANSPARENT);
+            block.setBackgroundColor(blockBackground(marked, personalColor));
             block.setOnClickListener(view -> showMergedDetails(pkg, comparison, rank));
             block.setOnLongClickListener(view -> {
                 toggleMark(activeContest, pkg.packageKey, comparison.originalRank());
                 boolean nowMarked = isMarked(activeContest, pkg.packageKey, comparison.originalRank());
-                block.setBackgroundColor(nowMarked ? getColor(R.color.marked_row) : Color.TRANSPARENT);
+                block.setBackgroundColor(blockBackground(nowMarked, personalColor));
                 return true;
             });
 
             int[][] stats = perTypeStats(comparison, pkg);
 
-            StringBuilder summaryText = new StringBuilder();
-            summaryText.append("#").append(position).append(" · P").append(comparison.originalRank());
-            for (int t = 0; t < types.size(); t++) {
-                summaryText.append("  ·  ")
-                        .append(stats[t][0]).append(" ✓ ").append(stats[t][1])
-                        .append(" ✗ (").append(types.get(t).slots).append(")");
-            }
             LinearLayout summary = new LinearLayout(this);
             summary.setOrientation(LinearLayout.HORIZONTAL);
             summary.setGravity(Gravity.CENTER_VERTICAL);
-            TextView summaryLabel = bodyText(summaryText.toString());
-            summaryLabel.setTextSize(12);
-            summaryLabel.setTextColor(getColor(R.color.muted));
-            if (position == 1 && pkg.completed > 0) summaryLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            summary.addView(summaryLabel, new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            TextView rankLabel = bodyText("#" + position);
+            rankLabel.setTextSize(13);
+            rankLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            rankLabel.setTextColor(getColor(R.color.primary_dark));
+            summary.addView(rankLabel, new LinearLayout.LayoutParams(dp(34), dp(30)));
+
+            StringBuilder infoText = new StringBuilder();
+            infoText.append("P").append(comparison.originalRank());
+            for (DrawType type : activeTypes) {
+                int idx = types.indexOf(type);
+                infoText.append("  ·  ")
+                        .append(stats[idx][0]).append(" ✓ ").append(stats[idx][1])
+                        .append(" ✗ (").append(type.slots).append(")");
+            }
+            TextView infoLabel = bodyText(infoText.toString());
+            infoLabel.setTextSize(12);
+            infoLabel.setTextColor(getColor(R.color.muted));
+            summary.addView(infoLabel, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
             block.addView(summary);
 
-            int offset = 0;
-            for (int t = 0; t < types.size(); t++) {
-                DrawType type = types.get(t);
+            for (DrawType type : activeTypes) {
+                int offset = offsetOf(type);
                 LinearLayout line = new LinearLayout(this);
                 line.setOrientation(LinearLayout.HORIZONTAL);
                 line.setGravity(Gravity.CENTER_VERTICAL);
@@ -454,7 +484,6 @@ public final class TrackingActivity extends Activity {
                     line.addView(resultCell(String.valueOf(predicted), correct, hasResult), cellParams);
                 }
                 block.addView(line);
-                offset += type.slots;
             }
 
             comparisonList.addView(block);
@@ -643,10 +672,26 @@ public final class TrackingActivity extends Activity {
         return type == DrawType.WEEKEND ? "Fin Sem" : type.label;
     }
 
+    private static final int[] PERSONAL_PALETTE = {
+            0xFFFFF3E0, 0xFFFFF8E1, 0xFFF1F8E9, 0xFFE8F5E9, 0xFFE0F7FA,
+            0xFFE3F2FD, 0xFFF3E5F5, 0xFFFCE4EC, 0xFFF9FBE7, 0xFFECEFF1,
+    };
+
+    private int personalColor(String name) {
+        if (name == null || name.isEmpty()) return 0xFFFFF3E0;
+        return PERSONAL_PALETTE[Math.abs(name.hashCode()) % PERSONAL_PALETTE.length];
+    }
+
+    private int blockBackground(boolean marked, int personalColor) {
+        if (marked) return getColor(R.color.marked_row);
+        if (personalColor != 0) return personalColor;
+        return Color.TRANSPARENT;
+    }
+
     private String packageKeyOf(DatabaseHelper.PredictionSnapshot snapshot) {
-        return "PERSONAL".equals(snapshot.packageType())
-                ? "PERSONAL:" + (snapshot.name() == null ? "Principal" : snapshot.name())
-                : "AUTO";
+        if ("PERSONAL".equals(snapshot.packageType()))
+            return "PERSONAL:" + (snapshot.name() == null ? "Principal" : snapshot.name());
+        return snapshot.packageType(); // "AUTO"
     }
 
     private int globalSlotNumber(DrawType type, int slot) {
@@ -667,6 +712,15 @@ public final class TrackingActivity extends Activity {
         return types.get(types.size() - 1);
     }
 
+    private int offsetOf(DrawType type) {
+        int offset = 0;
+        for (DrawType t : types) {
+            if (t == type) return offset;
+            offset += t.slots;
+        }
+        return 0;
+    }
+
     private int[][] perTypeStats(PredictionComparison.RankedPrediction comparison, MergedPackage pkg) {
         int[][] stats = new int[types.size()][2]; // [aciertos, fallas]
         int offset = 0;
@@ -685,6 +739,26 @@ public final class TrackingActivity extends Activity {
             offset += types.get(t).slots;
         }
         return stats;
+    }
+
+    private List<PredictionComparison.RankedPrediction> rankFiltered(MergedPackage pkg, DrawType filter) {
+        if (filter == null) {
+            return PredictionComparison.rank(pkg.sequences, pkg.results);
+        }
+        int offset = offsetOf(filter);
+        List<PredictionComparison.RankedPrediction> ranked = new ArrayList<>();
+        for (int i = 0; i < pkg.sequences.size(); i++) {
+            String sequence = pkg.sequences.get(i);
+            int matches = 0;
+            for (int slot = 0; slot < filter.slots; slot++) {
+                String r = pkg.results[offset + slot];
+                if (r != null && r.charAt(0) == sequence.charAt(offset + slot)) matches++;
+            }
+            ranked.add(new PredictionComparison.RankedPrediction(i + 1, sequence, matches));
+        }
+        ranked.sort(Comparator.comparingInt(PredictionComparison.RankedPrediction::matches).reversed()
+                .thenComparingInt(PredictionComparison.RankedPrediction::originalRank));
+        return ranked;
     }
 
     private List<MergedPackage> mergedPackages(int contestNumber) {

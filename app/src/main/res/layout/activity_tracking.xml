@@ -136,6 +136,13 @@
                     android:textAllCaps="false" />
             </LinearLayout>
 
+            <Spinner
+                android:id="@+id/sortFilterSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:id="@+id/comparisonList"
                 android:layout_width="match_parent"
