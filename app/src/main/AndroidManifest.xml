@@ -26,6 +26,9 @@
             android:name=".TrackingActivity"
             android:exported="false" />
         <activity
+            android:name=".HeatmapActivity"
+            android:exported="false" />
+        <activity
             android:name=".MainActivity"
             android:exported="false" />
     </application>

@@ -147,6 +147,9 @@ public final class MainActivity extends Activity {
         trackingButton.setOnClickListener(view -> startActivity(
                 new Intent(this, TrackingActivity.class).putExtra("drawType", selectedType.name())
         ));
+        findViewById(R.id.heatmapButton).setOnClickListener(view -> startActivity(
+                new Intent(this, HeatmapActivity.class)
+        ));
         logoutButton.setOnClickListener(view -> logout());
         newPersonalButton.setOnClickListener(view -> requestNewPersonal());
         personalSelector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {

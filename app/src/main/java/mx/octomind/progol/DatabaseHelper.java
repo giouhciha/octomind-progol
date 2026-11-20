@@ -297,6 +297,36 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
         return snapshots;
     }
 
+    public record AutomaticHeatmap(double[] averages, int contestCount) {}
+
+    /** Promedio de aciertos por posición (1..60) del paquete automático. -1 = sin datos. */
+    public AutomaticHeatmap automaticHeatmap() throws JSONException {
+        double[] total = new double[60];
+        int[] count = new int[60];
+        int contestCount = 0;
+        for (PredictionSnapshot snapshot : getPredictionSnapshots()) {
+            if (!"AUTO".equals(snapshot.packageType())) continue;
+            String[] results = getTrackedResults(snapshot.contestNumber()).results();
+            boolean anyTracked = false;
+            for (String r : results) if (r != null) { anyTracked = true; break; }
+            if (!anyTracked) continue;
+            contestCount++;
+            List<String> sequences = snapshot.sequences();
+            int limit = Math.min(sequences.size(), 60);
+            for (int i = 0; i < limit; i++) {
+                int hits = 0;
+                for (int slot = 0; slot < type.slots; slot++) {
+                    if (results[slot] != null && results[slot].charAt(0) == sequences.get(i).charAt(slot)) hits++;
+                }
+                total[i] += hits;
+                count[i]++;
+            }
+        }
+        double[] averages = new double[60];
+        for (int i = 0; i < 60; i++) averages[i] = count[i] > 0 ? total[i] / count[i] : -1.0;
+        return new AutomaticHeatmap(averages, contestCount);
+    }
+
     public TrackedResults getTrackedResults(int contestNumber) {
         String[] results = new String[type.slots];
         String source = "USER";
@@ -419,6 +449,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 item.put("sourceContest", cursor.getInt(cursor.getColumnIndexOrThrow("source_contest")));
                 item.put("targetContest", cursor.getInt(cursor.getColumnIndexOrThrow("target_contest")));
                 item.put("packageType", cursor.getString(cursor.getColumnIndexOrThrow("package_type")));
+                if ("AUTO_V2".equals(item.optString("packageType"))) continue; // motor v2 retirado
                 int nameColumn = cursor.getColumnIndexOrThrow("name");
                 if (!cursor.isNull(nameColumn)) item.put("name", cursor.getString(nameColumn));
                 item.put("modelVersion", cursor.getString(cursor.getColumnIndexOrThrow("model_version")));
@@ -516,6 +547,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 values.put("source_contest", item.getInt("sourceContest"));
                 values.put("target_contest", item.getInt("targetContest"));
                 String packageType = item.optString("packageType", "AUTO");
+                if ("AUTO_V2".equals(packageType)) continue; // motor v2 retirado
                 if (!isValidPackageType(packageType)) throw new JSONException("Tipo de paquete inválido");
                 values.put("package_type", packageType);
                 if (item.has("name")) values.put("name", item.getString("name"));
