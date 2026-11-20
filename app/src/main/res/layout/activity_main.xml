@@ -106,6 +106,14 @@
         </LinearLayout>
 
         <Button
+            android:id="@+id/suggestMultipleButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/suggest_multiple"
+            android:textAllCaps="false" />
+
+        <Button
             android:id="@+id/trackingButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

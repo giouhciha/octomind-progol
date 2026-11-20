@@ -45,6 +45,8 @@ import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -150,6 +152,7 @@ public final class MainActivity extends Activity {
         findViewById(R.id.heatmapButton).setOnClickListener(view -> startActivity(
                 new Intent(this, HeatmapActivity.class)
         ));
+        findViewById(R.id.suggestMultipleButton).setOnClickListener(view -> suggestMultiple());
         logoutButton.setOnClickListener(view -> logout());
         newPersonalButton.setOnClickListener(view -> requestNewPersonal());
         personalSelector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -979,6 +982,145 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(46), 1);
         params.setMargins(dp(6), 0, dp(6), 0);
         row.addView(cell, params);
+    }
+
+    private void suggestMultiple() {
+        if (lastAutomatic.isEmpty()) {
+            toast("Calcula primero el pronóstico.");
+            return;
+        }
+        DrawType[] types = activeTypes();
+        executor.execute(() -> {
+            try {
+                Map<DrawType, String[]> marksByType = new EnumMap<>(DrawType.class);
+                for (DrawType type : types) {
+                    PredictionEngine.Forecast forecast = lastAutomatic.get(type);
+                    if (forecast == null) continue;
+                    double[] hitRates = databases.get(type).automaticMatchHitRates();
+                    String[] marks = computeMultipleMarks(type, forecast, hitRates);
+                    databases.get(type).saveMultiple(forecast.targetContest(), forecast.sourceContest(), marks);
+                    marksByType.put(type, marks);
+                }
+                postUi(() -> showMultipleDialog(marksByType));
+            } catch (Exception error) {
+                postUi(() -> showError("No se pudo generar la múltiple", error));
+            }
+        });
+    }
+
+    private String[] computeMultipleMarks(DrawType type, PredictionEngine.Forecast forecast, double[] hitRates) {
+        int slots = type.slots;
+        Integer[] order = new Integer[slots];
+        for (int i = 0; i < slots; i++) order[i] = i;
+        Arrays.sort(order, (a, b) -> Double.compare(matchDifficulty(b, forecast, hitRates),
+                matchDifficulty(a, forecast, hitRates)));
+        int triples = type == DrawType.REVANCHA ? 2 : 3;
+        int dobles = type == DrawType.REVANCHA ? 3 : 2;
+        String[] marks = new String[slots];
+        for (int rank = 0; rank < slots; rank++) {
+            int slot = order[rank];
+            if (rank < triples) marks[slot] = "LEV";
+            else if (rank < triples + dobles) marks[slot] = topStates(forecast, slot, 2);
+            else marks[slot] = topStates(forecast, slot, 1);
+        }
+        return marks;
+    }
+
+    private double matchDifficulty(int slot, PredictionEngine.Forecast forecast, double[] hitRates) {
+        if (hitRates != null && slot < hitRates.length && hitRates[slot] >= 0) return 1.0 - hitRates[slot];
+        return 1.0 - maxProb(forecast, slot);
+    }
+
+    private double maxProb(PredictionEngine.Forecast forecast, int slot) {
+        return Math.max(Math.max(forecast.probability(slot, 0),
+                forecast.probability(slot, 1)), forecast.probability(slot, 2));
+    }
+
+    private String topStates(PredictionEngine.Forecast forecast, int slot, int count) {
+        double[] p = {forecast.probability(slot, 0), forecast.probability(slot, 1),
+                forecast.probability(slot, 2)};
+        Integer[] idx = {0, 1, 2};
+        Arrays.sort(idx, (a, b) -> Double.compare(p[b], p[a]));
+        char[] chars = {'L', 'E', 'V'};
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < count; i++) sb.append(chars[idx[i]]);
+        return sb.toString();
+    }
+
+    private int multipleColumns(String[] marks) {
+        int columns = 1;
+        for (String mark : marks) columns *= mark.length();
+        return columns;
+    }
+
+    private void showMultipleDialog(Map<DrawType, String[]> marksByType) {
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(6), 0, dp(6), 0);
+
+        for (Map.Entry<DrawType, String[]> entry : marksByType.entrySet()) {
+            addMultipleSection(content, entry.getKey(), entry.getValue());
+        }
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content);
+        new AlertDialog.Builder(this)
+                .setTitle("Múltiple sugerida")
+                .setView(scroll)
+                .setPositiveButton("Cerrar", null)
+                .show();
+    }
+
+    private void addMultipleSection(LinearLayout content, DrawType type, String[] marks) {
+        int target = lastAutomatic.get(type).targetContest();
+
+        TextView summary = bodyText(type.label + " · " + multipleColumns(marks) + " columnas");
+        summary.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        summary.setTextColor(getColor(R.color.primary_dark));
+        summary.setPadding(0, dp(10), 0, dp(2));
+        content.addView(summary);
+
+        List<DatabaseHelper.TeamNames> names = databases.get(type).getMatchNames(target);
+        for (int slot = 0; slot < type.slots; slot++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setPadding(dp(6), dp(4), dp(6), dp(4));
+            row.setBackgroundColor(getColor(R.color.row_surface));
+
+            TextView number = bodyText(Integer.toString(slot + 1));
+            number.setGravity(Gravity.CENTER);
+            number.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            row.addView(number, new LinearLayout.LayoutParams(dp(30), dp(44)));
+
+            String mark = marks[slot];
+            String kind = mark.length() == 3 ? "Triple" : (mark.length() == 2 ? "Doble" : "Sencillo");
+            int kindColor = mark.length() == 3 ? R.color.pick_green
+                    : (mark.length() == 2 ? R.color.fixed_yellow : R.color.muted);
+            TextView kindView = bodyText(kind);
+            kindView.setTextSize(10);
+            kindView.setGravity(Gravity.CENTER);
+            kindView.setTextColor(getColor(kindColor));
+            row.addView(kindView, new LinearLayout.LayoutParams(dp(58), dp(44)));
+
+            DatabaseHelper.TeamNames teams = slot < names.size() ? names.get(slot)
+                    : new DatabaseHelper.TeamNames("", "");
+            String teamLabel = teams.local().isBlank() && teams.visitor().isBlank()
+                    ? "" : teams.local() + " vs " + teams.visitor();
+            TextView teamView = bodyText(teamLabel);
+            teamView.setTextSize(12);
+            teamView.setTextColor(getColor(R.color.muted));
+            teamView.setGravity(Gravity.CENTER_VERTICAL);
+            teamView.setPadding(dp(4), 0, dp(4), 0);
+            row.addView(teamView, new LinearLayout.LayoutParams(0, dp(44), 1.5f));
+
+            addStateCell(row, "L", mark.indexOf('L') >= 0, false);
+            addStateCell(row, "E", mark.indexOf('E') >= 0, false);
+            addStateCell(row, "V", mark.indexOf('V') >= 0, false);
+
+            content.addView(row, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(52)));
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")

@@ -206,7 +206,31 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     private static boolean isValidPackageType(String packageType) {
-        return "AUTO".equals(packageType) || "PERSONAL".equals(packageType);
+        return "AUTO".equals(packageType) || "PERSONAL".equals(packageType) || "MULTIPLE".equals(packageType);
+    }
+
+    /** Guarda la quiniela múltiple (marcas por partido, p.ej. "LEV", "LE", "V"). */
+    public void saveMultiple(int targetContest, int sourceContest, String[] marks) throws JSONException {
+        JSONObject payload = new JSONObject();
+        JSONArray marksArray = new JSONArray();
+        for (String mark : marks) marksArray.put(mark);
+        payload.put("marks", marksArray);
+        savePredictionRaw(sourceContest, targetContest, type.modelVersion(),
+                payload.toString(), "MULTIPLE", true, null);
+    }
+
+    /** Devuelve las marcas de la quiniela múltiple del concurso, o null si no existe. */
+    public String[] getMultiple(int contestNumber) throws JSONException {
+        try (Cursor cursor = getReadableDatabase().query(
+                "prediction_runs", null, "target_contest = ? AND package_type = ?",
+                new String[]{Integer.toString(contestNumber), "MULTIPLE"}, null, null, "id DESC")) {
+            if (!cursor.moveToFirst()) return null;
+            JSONObject payload = new JSONObject(cursor.getString(cursor.getColumnIndexOrThrow("payload")));
+            JSONArray marksArray = payload.getJSONArray("marks");
+            String[] marks = new String[type.slots];
+            for (int slot = 0; slot < type.slots; slot++) marks[slot] = marksArray.getString(slot);
+            return marks;
+        }
     }
 
     private void savePredictionRaw(
@@ -258,7 +282,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
             while (cursor.moveToNext()) {
                 int target = cursor.getInt(cursor.getColumnIndexOrThrow("target_contest"));
                 String packageType = cursor.getString(cursor.getColumnIndexOrThrow("package_type"));
-                if ("AUTO_V2".equals(packageType)) continue; // motor v2 retirado
+                if ("AUTO_V2".equals(packageType) || "MULTIPLE".equals(packageType)) continue; // no son sencillas
                 int nameColumn = cursor.getColumnIndexOrThrow("name");
                 String name = cursor.isNull(nameColumn) ? null : cursor.getString(nameColumn);
                 String key = target + ":" + packageType + ":" + name;
@@ -471,7 +495,7 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
                 item.put("sourceContest", cursor.getInt(cursor.getColumnIndexOrThrow("source_contest")));
                 item.put("targetContest", cursor.getInt(cursor.getColumnIndexOrThrow("target_contest")));
                 item.put("packageType", cursor.getString(cursor.getColumnIndexOrThrow("package_type")));
-                if ("AUTO_V2".equals(item.optString("packageType"))) continue; // motor v2 retirado
+                if ("AUTO_V2".equals(item.optString("packageType")) || "MULTIPLE".equals(item.optString("packageType"))) continue; // no se exportan
                 int nameColumn = cursor.getColumnIndexOrThrow("name");
                 if (!cursor.isNull(nameColumn)) item.put("name", cursor.getString(nameColumn));
                 item.put("modelVersion", cursor.getString(cursor.getColumnIndexOrThrow("model_version")));

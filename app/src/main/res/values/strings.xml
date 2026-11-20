@@ -9,6 +9,7 @@
     <string name="create_backup">Crear respaldo</string>
     <string name="restore_backup">Restaurar respaldo</string>
     <string name="open_tracking">Seguimiento de resultados</string>
+    <string name="suggest_multiple">Sugerir múltiple</string>
     <string name="open_heatmap">Mapa de calor</string>
     <string name="heatmap_title">Mapa de calor de posiciones</string>
     <string name="heatmap_subtitle">Rendimiento de las quinielas automáticas, por posición o por partido</string>

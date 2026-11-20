@@ -416,10 +416,76 @@ public final class TrackingActivity extends Activity {
             comparisonList.addView(heading);
             addMergedPackageComparison(pkg);
         }
+        renderMultiple(contestNumber);
         if (!anyPackage) {
             TextView none = bodyText("Sin pronósticos guardados para este concurso.");
             none.setTextColor(getColor(R.color.muted));
             comparisonList.addView(none);
+        }
+    }
+
+    private void renderMultiple(int contestNumber) {
+        for (DrawType type : types) {
+            String[] marks;
+            try {
+                marks = databases.get(type).getMultiple(contestNumber);
+            } catch (JSONException error) {
+                continue;
+            }
+            if (marks == null) continue;
+
+            String[] results = databases.get(type).getTrackedResults(contestNumber).results();
+            int covered = 0, total = 0;
+            for (int slot = 0; slot < type.slots; slot++) {
+                if (results[slot] == null) continue;
+                total++;
+                if (marks[slot].indexOf(results[slot].charAt(0)) >= 0) covered++;
+            }
+
+            TextView heading = bodyText("Quiniela múltiple · " + type.label
+                    + (total > 0 ? " · " + covered + "/" + total + " cubiertos" : ""));
+            heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            heading.setTextColor(getColor(R.color.primary_dark));
+            heading.setPadding(0, dp(12), 0, dp(2));
+            comparisonList.addView(heading);
+
+            List<DatabaseHelper.TeamNames> names = databases.get(type).getMatchNames(contestNumber);
+            for (int slot = 0; slot < type.slots; slot++) {
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(dp(6), dp(4), dp(6), dp(4));
+                row.setBackgroundColor(getColor(R.color.row_surface));
+
+                TextView number = bodyText(Integer.toString(slot + 1));
+                number.setGravity(Gravity.CENTER);
+                number.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                row.addView(number, new LinearLayout.LayoutParams(dp(30), dp(40)));
+
+                DatabaseHelper.TeamNames teams = slot < names.size() ? names.get(slot)
+                        : new DatabaseHelper.TeamNames("", "");
+                String teamLabel = teams.local().isBlank() && teams.visitor().isBlank()
+                        ? "Partido " + (slot + 1) : teams.local() + " vs " + teams.visitor();
+                TextView team = bodyText(teamLabel);
+                team.setTextSize(12);
+                team.setTextColor(getColor(R.color.muted));
+                team.setGravity(Gravity.CENTER_VERTICAL);
+                team.setPadding(dp(4), 0, dp(4), 0);
+                row.addView(team, new LinearLayout.LayoutParams(0, dp(40), 1.5f));
+
+                String kind = marks[slot].length() == 3 ? "Triple"
+                        : (marks[slot].length() == 2 ? "Doble" : "Sencillo");
+                int kindColor = marks[slot].length() == 3 ? R.color.pick_green
+                        : (marks[slot].length() == 2 ? R.color.fixed_yellow : R.color.muted);
+                TextView kindView = bodyText(kind);
+                kindView.setTextSize(11);
+                kindView.setGravity(Gravity.CENTER);
+                kindView.setTextColor(getColor(kindColor));
+                row.addView(kindView, new LinearLayout.LayoutParams(dp(64), dp(40)));
+
+                comparisonList.addView(row, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dp(44)));
+            }
         }
     }
 
