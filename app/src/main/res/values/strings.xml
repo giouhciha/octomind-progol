@@ -11,11 +11,14 @@
     <string name="open_tracking">Seguimiento de resultados</string>
     <string name="open_heatmap">Mapa de calor</string>
     <string name="heatmap_title">Mapa de calor de posiciones</string>
-    <string name="heatmap_subtitle">Promedio de aciertos por posición (1–60) de las quinielas automáticas</string>
-    <string name="heatmap_legend">Rojo = menos aciertos · Verde = más aciertos. Cada celda muestra posición y promedio.</string>
+    <string name="heatmap_subtitle">Rendimiento de las quinielas automáticas, por posición o por partido</string>
+    <string name="heatmap_legend">Rojo = peor resultado · Verde = mejor resultado. Cada celda muestra el número y su valor.</string>
     <string name="heatmap_sort">Orden</string>
-    <string name="heatmap_sort_position">Por posición (1–60)</string>
-    <string name="heatmap_sort_average">Por promedio (mejor primero)</string>
+    <string name="heatmap_sort_natural">Orden natural</string>
+    <string name="heatmap_sort_best">Mejor primero</string>
+    <string name="heatmap_dimension">Dimensión</string>
+    <string name="heatmap_dimension_position">Por posición (1–60)</string>
+    <string name="heatmap_dimension_match">Por partido</string>
     <string name="logout">Cerrar sesión</string>
     <string name="tracking_title">Seguimiento de pronósticos</string>
     <string name="tracking_subtitle">Captura los resultados conforme terminan los partidos. Puedes dejar casillas pendientes.</string>

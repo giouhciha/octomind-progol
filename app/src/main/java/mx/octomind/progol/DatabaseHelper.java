@@ -327,6 +327,28 @@ public final class DatabaseHelper extends SQLiteOpenHelper {
         return new AutomaticHeatmap(averages, contestCount);
     }
 
+    /** Porcentaje de aciertos por partido (0..1) del paquete automático. -1 = sin datos. */
+    public double[] automaticMatchHitRates() throws JSONException {
+        int[] correct = new int[type.slots];
+        int[] total = new int[type.slots];
+        for (PredictionSnapshot snapshot : getPredictionSnapshots()) {
+            if (!"AUTO".equals(snapshot.packageType())) continue;
+            String[] results = getTrackedResults(snapshot.contestNumber()).results();
+            for (String sequence : snapshot.sequences()) {
+                for (int slot = 0; slot < type.slots; slot++) {
+                    if (results[slot] == null) continue;
+                    total[slot]++;
+                    if (results[slot].charAt(0) == sequence.charAt(slot)) correct[slot]++;
+                }
+            }
+        }
+        double[] rates = new double[type.slots];
+        for (int slot = 0; slot < type.slots; slot++) {
+            rates[slot] = total[slot] > 0 ? (double) correct[slot] / total[slot] : -1.0;
+        }
+        return rates;
+    }
+
     public TrackedResults getTrackedResults(int contestNumber) {
         String[] results = new String[type.slots];
         String source = "USER";

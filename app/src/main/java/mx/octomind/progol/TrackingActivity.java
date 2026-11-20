@@ -209,7 +209,6 @@ public final class TrackingActivity extends Activity {
             resultLabels.put(type, new ArrayList<>());
         }
         activeContest = 0;
-        int counter = 1;
         boolean multiple = types.size() > 1;
         sortFilterSpinner.setVisibility(multiple ? View.VISIBLE : View.GONE);
         if (!multiple) {
@@ -231,7 +230,7 @@ public final class TrackingActivity extends Activity {
                 match.setPadding(dp(7), dp(4), dp(7), dp(4));
                 match.setBackground(matchBackground());
 
-                TextView number = bodyText(Integer.toString(counter++));
+                TextView number = bodyText(Integer.toString(slot + 1));
                 number.setGravity(Gravity.CENTER); number.setTextColor(getColor(R.color.muted));
                 match.addView(number, new LinearLayout.LayoutParams(dp(30), dp(44)));
 
@@ -293,7 +292,7 @@ public final class TrackingActivity extends Activity {
         }
         String[] choices = {"Local  ·  L", "Empate  ·  E", "Visitante  ·  V", "Quitar resultado"};
         new AlertDialog.Builder(this)
-                .setTitle("Resultado · " + type.label + " · Partido " + globalSlotNumber(type, slot))
+                .setTitle("Resultado · " + type.label + " · Partido " + (slot + 1))
                 .setItems(choices, (dialog, position) -> {
                     String state = position == 0 ? "L" : position == 1 ? "E" : position == 2 ? "V" : null;
                     db.saveTrackedResult(activeContest, slot, state);
@@ -356,8 +355,13 @@ public final class TrackingActivity extends Activity {
                 if ("AUTO".equals(snapshot.packageType())) automatic = true;
             }
         }
+        // Los concursos "pronosticados" (pasados) alimentan el mapa de calor, así
+        // que se bloquea su eliminación para no introducir ruido.
+        boolean locked = activeContest != 0 && activeContest != publishedContestNumber;
         deletePersonalButton.setVisibility(personal ? View.VISIBLE : View.GONE);
         deleteAutomaticButton.setVisibility(automatic ? View.VISIBLE : View.GONE);
+        deletePersonalButton.setEnabled(!locked);
+        deleteAutomaticButton.setEnabled(!locked);
     }
 
     private void confirmDeletePackage(String packageType) {
@@ -526,6 +530,7 @@ public final class TrackingActivity extends Activity {
         DrawType previousType = null;
         for (int slot = 0; slot < pkg.totalSlots; slot++) {
             DrawType currentType = typeAtGlobalSlot(slot);
+            int localNumber = slot - offsetOf(currentType) + 1;
             if (currentType != previousType) {
                 int idx = types.indexOf(currentType);
                 TextView section = bodyText(currentType.label + " · " + stats[idx][0] + "/" + currentType.slots + " aciertos");
@@ -541,13 +546,13 @@ public final class TrackingActivity extends Activity {
             row.setPadding(dp(4), dp(4), dp(4), dp(4));
             row.setBackgroundColor(getColor(R.color.row_surface));
 
-            TextView number = bodyText(Integer.toString(slot + 1));
+            TextView number = bodyText(Integer.toString(localNumber));
             number.setGravity(Gravity.CENTER);
             number.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             row.addView(number, new LinearLayout.LayoutParams(dp(30), dp(44)));
 
             String teamLabel = slot < pkg.teamNames.size() && !pkg.teamNames.get(slot).isEmpty()
-                    ? pkg.teamNames.get(slot) : "Partido " + (slot + 1);
+                    ? pkg.teamNames.get(slot) : "Partido " + localNumber;
             TextView teamView = bodyText(teamLabel);
             teamView.setTextSize(12);
             teamView.setTextColor(getColor(R.color.muted));
@@ -692,15 +697,6 @@ public final class TrackingActivity extends Activity {
         if ("PERSONAL".equals(snapshot.packageType()))
             return "PERSONAL:" + (snapshot.name() == null ? "Principal" : snapshot.name());
         return snapshot.packageType(); // "AUTO"
-    }
-
-    private int globalSlotNumber(DrawType type, int slot) {
-        int base = 1;
-        for (DrawType t : types) {
-            if (t == type) return base + slot;
-            base += t.slots;
-        }
-        return slot + 1;
     }
 
     private DrawType typeAtGlobalSlot(int globalSlot) {
