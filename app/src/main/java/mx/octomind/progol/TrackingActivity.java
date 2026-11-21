@@ -123,7 +123,11 @@ public final class TrackingActivity extends Activity {
         });
     }
 
-    @Override protected void onResume() { super.onResume(); fetchPublishedContest(); }
+    @Override protected void onResume() {
+        super.onResume();
+        loadSnapshots();         // carga local inmediata, sin depender de red
+        fetchPublishedContest(); // actualiza concurso publicado y nombres en segundo plano
+    }
 
     private String refreshAccessToken() {
         String accessToken = Session.accessToken(this);
