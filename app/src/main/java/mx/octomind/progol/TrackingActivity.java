@@ -477,15 +477,24 @@ public final class TrackingActivity extends Activity {
                 team.setPadding(dp(4), 0, dp(4), 0);
                 row.addView(team, new LinearLayout.LayoutParams(0, dp(40), 1.5f));
 
-                String kind = marks[slot].length() == 3 ? "Triple"
-                        : (marks[slot].length() == 2 ? "Doble" : "Sencillo");
-                int kindColor = marks[slot].length() == 3 ? R.color.pick_green
-                        : (marks[slot].length() == 2 ? R.color.fixed_yellow : R.color.muted);
+                String mark = marks[slot];
+                String kind = mark.length() == 3 ? "Triple"
+                        : (mark.length() == 2 ? "Doble " + mark.charAt(0) + "·" + mark.charAt(1)
+                        : "Sencillo " + mark.charAt(0));
                 TextView kindView = bodyText(kind);
-                kindView.setTextSize(11);
+                kindView.setTextSize(9);
                 kindView.setGravity(Gravity.CENTER);
-                kindView.setTextColor(getColor(kindColor));
-                row.addView(kindView, new LinearLayout.LayoutParams(dp(64), dp(40)));
+                kindView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                kindView.setTextColor(getColor(R.color.primary_dark));
+                String result = results[slot];
+                if (result != null) {
+                    GradientDrawable bg = new GradientDrawable();
+                    bg.setCornerRadius(dp(6));
+                    bg.setColor(getColor(marks[slot].indexOf(result.charAt(0)) >= 0
+                            ? R.color.hit_green : R.color.miss_red));
+                    kindView.setBackground(bg);
+                }
+                row.addView(kindView, new LinearLayout.LayoutParams(dp(88), dp(40)));
 
                 comparisonList.addView(row, new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, dp(44)));

@@ -66,6 +66,7 @@
                 android:id="@+id/deletePersonalButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:background="@drawable/glass_button"
                 android:text="Eliminar personalizado"
                 android:textAllCaps="false" />
 
@@ -74,6 +75,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
+                android:background="@drawable/glass_button"
                 android:text="Eliminar automático"
                 android:textAllCaps="false" />
         </LinearLayout>

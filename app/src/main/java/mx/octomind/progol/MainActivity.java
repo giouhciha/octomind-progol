@@ -1094,14 +1094,15 @@ public final class MainActivity extends Activity {
             row.addView(number, new LinearLayout.LayoutParams(dp(30), dp(44)));
 
             String mark = marks[slot];
-            String kind = mark.length() == 3 ? "Triple" : (mark.length() == 2 ? "Doble" : "Sencillo");
-            int kindColor = mark.length() == 3 ? R.color.pick_green
-                    : (mark.length() == 2 ? R.color.fixed_yellow : R.color.muted);
+            String kind = mark.length() == 3 ? "Triple"
+                    : (mark.length() == 2 ? "Doble " + mark.charAt(0) + "·" + mark.charAt(1)
+                    : "Sencillo " + mark.charAt(0));
             TextView kindView = bodyText(kind);
-            kindView.setTextSize(10);
+            kindView.setTextSize(9);
             kindView.setGravity(Gravity.CENTER);
-            kindView.setTextColor(getColor(kindColor));
-            row.addView(kindView, new LinearLayout.LayoutParams(dp(58), dp(44)));
+            kindView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            kindView.setTextColor(getColor(R.color.primary_dark));
+            row.addView(kindView, new LinearLayout.LayoutParams(dp(88), dp(44)));
 
             DatabaseHelper.TeamNames teams = slot < names.size() ? names.get(slot)
                     : new DatabaseHelper.TeamNames("", "");

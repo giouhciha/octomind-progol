@@ -55,6 +55,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
+        android:background="@drawable/glass_button"
         android:text="Iniciar sesión"
         android:textAllCaps="false" />
 
@@ -63,6 +64,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
+        android:background="@drawable/glass_button"
         android:text="Registrarse"
         android:textAllCaps="false" />
 
