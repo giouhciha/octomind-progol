@@ -1014,8 +1014,8 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < slots; i++) order[i] = i;
         Arrays.sort(order, (a, b) -> Double.compare(matchDifficulty(b, forecast, hitRates),
                 matchDifficulty(a, forecast, hitRates)));
-        int triples = type == DrawType.REVANCHA ? 2 : 3;
-        int dobles = type == DrawType.REVANCHA ? 3 : 2;
+        int triples = type == DrawType.WEEKEND ? 3 : 2;
+        int dobles = type == DrawType.WEEKEND ? 2 : 3;
         String[] marks = new String[slots];
         for (int rank = 0; rank < slots; rank++) {
             int slot = order[rank];
