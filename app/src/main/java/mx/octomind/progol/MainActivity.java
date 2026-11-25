@@ -45,8 +45,6 @@ import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -996,8 +994,8 @@ public final class MainActivity extends Activity {
                 for (DrawType type : types) {
                     PredictionEngine.Forecast forecast = lastAutomatic.get(type);
                     if (forecast == null) continue;
-                    double[] hitRates = databases.get(type).automaticMatchHitRates();
-                    String[] marks = computeMultipleMarks(type, forecast, hitRates);
+                    List<Contest> history = databases.get(type).getAllContests();
+                    String[] marks = new MultipleEngine(type).compute(history);
                     databases.get(type).saveMultiple(forecast.targetContest(), forecast.sourceContest(), marks);
                     marksByType.put(type, marks);
                 }
@@ -1006,45 +1004,6 @@ public final class MainActivity extends Activity {
                 postUi(() -> showError("No se pudo generar la múltiple", error));
             }
         });
-    }
-
-    private String[] computeMultipleMarks(DrawType type, PredictionEngine.Forecast forecast, double[] hitRates) {
-        int slots = type.slots;
-        Integer[] order = new Integer[slots];
-        for (int i = 0; i < slots; i++) order[i] = i;
-        Arrays.sort(order, (a, b) -> Double.compare(matchDifficulty(b, forecast, hitRates),
-                matchDifficulty(a, forecast, hitRates)));
-        int triples = type == DrawType.WEEKEND ? 3 : 2;
-        int dobles = type == DrawType.WEEKEND ? 2 : 3;
-        String[] marks = new String[slots];
-        for (int rank = 0; rank < slots; rank++) {
-            int slot = order[rank];
-            if (rank < triples) marks[slot] = "LEV";
-            else if (rank < triples + dobles) marks[slot] = topStates(forecast, slot, 2);
-            else marks[slot] = topStates(forecast, slot, 1);
-        }
-        return marks;
-    }
-
-    private double matchDifficulty(int slot, PredictionEngine.Forecast forecast, double[] hitRates) {
-        if (hitRates != null && slot < hitRates.length && hitRates[slot] >= 0) return 1.0 - hitRates[slot];
-        return 1.0 - maxProb(forecast, slot);
-    }
-
-    private double maxProb(PredictionEngine.Forecast forecast, int slot) {
-        return Math.max(Math.max(forecast.probability(slot, 0),
-                forecast.probability(slot, 1)), forecast.probability(slot, 2));
-    }
-
-    private String topStates(PredictionEngine.Forecast forecast, int slot, int count) {
-        double[] p = {forecast.probability(slot, 0), forecast.probability(slot, 1),
-                forecast.probability(slot, 2)};
-        Integer[] idx = {0, 1, 2};
-        Arrays.sort(idx, (a, b) -> Double.compare(p[b], p[a]));
-        char[] chars = {'L', 'E', 'V'};
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < count; i++) sb.append(chars[idx[i]]);
-        return sb.toString();
     }
 
     private int multipleColumns(String[] marks) {
